@@ -25,11 +25,14 @@ export class ViewerRoom {
     this.call = null;
   }
 
-  /** Publishes the viewer's mic and signals the reception tablet to unmute + upgrade quality. */
-  startTalk(withVideo: boolean): void {
+  /** Publishes the viewer's mic (and front camera) and signals the reception tablet to unmute + upgrade quality. */
+  async startTalk(withVideo: boolean): Promise<void> {
     if (!this.call) return;
     this.call.setLocalAudio(true);
-    if (withVideo) this.call.setLocalVideo(true);
+    if (withVideo) {
+      await this.call.updateInputSettings({ video: { settings: { facingMode: "user" } } });
+      this.call.setLocalVideo(true);
+    }
     this.call.sendAppMessage({ type: "talk-request" }, "*");
   }
 

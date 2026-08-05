@@ -112,7 +112,7 @@ export default function App() {
   }
 
   const startTalk = () => {
-    roomRef.current?.startTalk(false);
+    void roomRef.current?.startTalk(true);
     setTalking(true);
   };
   const endTalk = () => {

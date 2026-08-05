@@ -28,6 +28,7 @@ export class ReceptionRoom {
     private onCameraError?: (error: unknown) => void,
     private onLocalVideoTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteAudioTrack?: (track: MediaStreamTrack | null) => void,
+    private onRemoteVideoTrack?: (track: MediaStreamTrack | null) => void,
   ) {}
 
   updateConfig(config: AppConfig) {
@@ -160,29 +161,37 @@ export class ReceptionRoom {
 
   // Daily's call-object mode auto-subscribes to remote tracks by default,
   // but subscribing isn't the same as playing: nothing attaches the
-  // viewer's incoming mic audio to an actual audio element unless we do it
-  // ourselves. Without this, pressing Talk on the viewer changes nothing
-  // audible on the tablet even though the audio genuinely arrives.
+  // viewer's incoming mic audio (or, during a talk session, video) to an
+  // actual media element unless we do it ourselves.
   private handleRemoteTrackStarted = (event?: DailyEventObjectTrack) => {
-    if (event?.participant?.local || event?.track?.kind !== "audio") return;
-    this.onRemoteAudioTrack?.(event.track);
+    if (event?.participant?.local) return;
+    if (event?.track?.kind === "audio") this.onRemoteAudioTrack?.(event.track);
+    else if (event?.track?.kind === "video") this.onRemoteVideoTrack?.(event.track);
   };
 
   private handleRemoteTrackStopped = (event?: DailyEventObjectTrack) => {
-    if (event?.participant?.local || event?.track?.kind !== "audio") return;
-    this.onRemoteAudioTrack?.(null);
+    if (event?.participant?.local) return;
+    if (event?.track?.kind === "audio") this.onRemoteAudioTrack?.(null);
+    else if (event?.track?.kind === "video") this.onRemoteVideoTrack?.(null);
   };
 
   private async applyAmbientQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.ambient;
-    await this.call.updateInputSettings({ video: { settings: { width, height, frameRate } } });
+    // facingMode "user" (front/selfie camera) so the tablet faces whoever
+    // walks up to the desk, rather than whatever the rear camera happens
+    // to point at.
+    await this.call.updateInputSettings({
+      video: { settings: { width, height, frameRate, facingMode: "user" } },
+    });
   }
 
   private async applyTalkQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.talk;
-    await this.call.updateInputSettings({ video: { settings: { width, height, frameRate } } });
+    await this.call.updateInputSettings({
+      video: { settings: { width, height, frameRate, facingMode: "user" } },
+    });
   }
 
   /** Un-mutes the mic and bumps video quality for the duration of the exchange. */

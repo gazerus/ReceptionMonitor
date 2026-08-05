@@ -6,6 +6,7 @@ import { keepScreenAwake } from "./wakeLock";
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
+const TALK_VIDEO_HOLD_MS = 30_000;
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
@@ -16,6 +17,9 @@ export default function App() {
   const configRef = useRef<AppConfig | null>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [showRemoteVideo, setShowRemoteVideo] = useState(false);
+  const remoteVideoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     void keepScreenAwake();
@@ -73,6 +77,26 @@ export default function App() {
             remoteAudioRef.current.srcObject = track ? new MediaStream([track]) : null;
           }
         },
+        (track) => {
+          if (remoteVideoHideTimer.current) {
+            clearTimeout(remoteVideoHideTimer.current);
+            remoteVideoHideTimer.current = null;
+          }
+          if (track) {
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = new MediaStream([track]);
+            }
+            setShowRemoteVideo(true);
+          } else {
+            // Hold the last frame on screen for a while after the talk
+            // session ends rather than snapping straight back to the
+            // ambient view.
+            remoteVideoHideTimer.current = setTimeout(() => {
+              setShowRemoteVideo(false);
+              if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+            }, TALK_VIDEO_HOLD_MS);
+          }
+        },
       );
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
@@ -87,6 +111,7 @@ export default function App() {
       clearInterval(scheduleTimer);
       clearInterval(configTimer);
       clearInterval(clockTimer);
+      if (remoteVideoHideTimer.current) clearTimeout(remoteVideoHideTimer.current);
       void roomRef.current?.leave();
     };
   }, []);
@@ -113,6 +138,21 @@ export default function App() {
       <StatusPill status={status} />
       <audio ref={remoteAudioRef} autoPlay />
       <video
+        ref={remoteVideoRef}
+        autoPlay
+        playsInline
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          background: "#000",
+          zIndex: 5,
+          display: showRemoteVideo ? "block" : "none",
+        }}
+      />
+      <video
         ref={previewRef}
         autoPlay
         muted
@@ -127,6 +167,7 @@ export default function App() {
           borderRadius: 8,
           border: "1px solid #333",
           background: "#000",
+          zIndex: 10,
         }}
       />
     </div>
