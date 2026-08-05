@@ -53,7 +53,16 @@ export class ReceptionRoom {
     call.on("track-stopped", this.handleLocalTrackStopped);
 
     try {
-      await call.join({ url: this.config.room.roomUrl });
+      // startAudioOff/startVideoOff are accepted independently by both
+      // createCallObject() and join() -- setting them only at creation
+      // left the local video track sitting at state "off" after join()
+      // (confirmed via the post-join track-state log below), so set them
+      // at both call sites.
+      await call.join({
+        url: this.config.room.roomUrl,
+        startAudioOff: true,
+        startVideoOff: false,
+      });
     } catch (err) {
       // Don't leave `this.call` pointing at a call object that never
       // actually joined — that would make isJoined true and stop the
@@ -68,6 +77,10 @@ export class ReceptionRoom {
 
     this.call = call;
     await this.applyAmbientQuality();
+
+    // Belt-and-suspenders: force video on explicitly in case join()'s
+    // startVideoOff isn't enough on its own either.
+    call.setLocalVideo(true);
 
     const localVideo = call.participants().local?.tracks?.video;
     console.log(
