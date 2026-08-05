@@ -17,7 +17,9 @@ packages/
               ambient video, listens for talk requests
   viewer/     Plain Vite + React + TS web page — Garry's side, subscribe-only + Talk button
 server/
-  mint-token.php   Optional server-side access control upgrade (see below)
+  mint-token.php       Optional server-side access control upgrade (see below)
+  subscribe.php        Stores a viewer's Web Push subscription for the doorbell
+  notify-doorbell.php  Sends the Web Push notification when the doorbell is pressed
 ```
 
 Uses [Daily.co](https://daily.co) as the WebRTC SDK (signaling + TURN handled
@@ -39,24 +41,34 @@ for the shape.
 ## What's implemented
 
 - **Reception app**: polls the schedule every 30s; joins the Daily room and
-  publishes ambient-quality video (no mic) when inside the window, leaves
-  when outside it. Mic is acquired-but-muted at join (`startAudioOff: true`)
-  so a talk request can unmute instantly with no renegotiation delay.
-  Listens for `talk-request`/`talk-end` app messages, upgrading video via
-  `setBandwidth({ trackConstraints })` (Daily's equivalent of raw WebRTC's
-  `applyConstraints`) and toggling the mic. Includes a safety-net timeout so
-  a lost `talk-end` message can't leave the mic on indefinitely. Keeps the
-  screen awake via `@capacitor-community/keep-awake`.
+  publishes ambient-quality video (front/selfie camera, no mic) when inside
+  the window, leaves when outside it. Mic is acquired-but-muted at join so a
+  talk request can unmute instantly with no renegotiation delay. Listens for
+  `talk-request`/`talk-end` app messages, upgrading video via
+  `updateInputSettings` and toggling the mic. Plays the viewer's incoming
+  audio out loud, and shows the viewer's video full-screen during a talk
+  session (holding 30s after it ends) with a small self-preview thumbnail
+  always visible. Has an on-screen doorbell button for when nobody's
+  watching the viewer. Keeps the screen awake via
+  `@capacitor-community/keep-awake`.
 - **Viewer**: fetches the same config, gates access with an email check
-  against the allowlist, joins subscribe-only (no local mic/camera sent),
-  renders the reception feed, and has a hold-to-talk button that publishes
-  the mic and signals the tablet.
+  against the allowlist, joins subscribe-only (no local mic/camera sent
+  until Talk is pressed), renders the reception feed, and has a hold-to-talk
+  button that publishes mic + front camera and signals the tablet. Can
+  subscribe to Web Push notifications so the doorbell reaches your phone
+  even with the tab closed.
 - **Access control**: allowlist is a plain array of emails in the shared
   config — starts with just Garry, and adding Sonja/Richie/Shane later is a
   one-line JSON edit, no code change.
 
 Both `reception` and `viewer` typecheck and build cleanly (`npm run
 typecheck` / `npm run build` from the repo root).
+
+**Keep `@daily-co/daily-js` current.** Daily enforces minimum client
+versions server-side — an EOL SDK version silently blocks camera/mic access
+with no error anywhere, which cost a long debugging session here (see git
+history). If a live room mysteriously stops working, check Logcat/console
+for a "no longer supported" message before assuming anything else broke.
 
 ## Open decisions — defaults assumed here, confirm and adjust
 
@@ -126,18 +138,18 @@ Manual steps, or if the script doesn't work on your machine:
 5. On first launch the app requests camera + microphone permissions —
    accept both, or the feed will just stay black with no visible error.
 
-Two Android-specific things were needed beyond stock Capacitor output,
-already applied in the committed project:
-- `AndroidManifest.xml` — added `CAMERA`, `RECORD_AUDIO`, and `WAKE_LOCK`
-  permissions (Capacitor's manifest only ever includes `INTERNET` by
-  default).
-- `MainActivity.java` — added an explicit runtime permission request for
-  camera/mic on launch. Capacitor's WebView only grants a page's
-  `getUserMedia()` call if the underlying Android permission is *already*
-  held — unlike a plugin such as `@capacitor/camera`, nothing prompts for
-  it automatically when your JS just calls `getUserMedia` directly (which
-  is what `daily-js` does under the hood), so without this the camera
-  would silently never come on.
+One Android-specific thing was needed beyond stock Capacitor output,
+already applied in the committed project: `AndroidManifest.xml` adds
+`CAMERA`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, and `WAKE_LOCK`
+permissions (Capacitor's manifest only ever includes `INTERNET` by
+default). Capacitor's `BridgeWebChromeClient` already handles requesting
+these at runtime and granting them to the WebView when the page calls
+`getUserMedia()` — no custom `MainActivity` code needed. Daily requests
+camera+mic together in one grant, and `MODIFY_AUDIO_SETTINGS` being
+missing silently denies the *whole* request, camera included, even though
+Camera/Mic show "Allowed" in Settings (it's not a user-toggleable
+permission, so there's nothing to see there) — worth knowing if this ever
+needs debugging again.
 
 **Since the schedule defaults to 08:00–16:00 Mon–Fri**, the app will just
 sit on "Outside monitoring hours" outside that window — to test
@@ -158,9 +170,55 @@ viewer app yet — copy `server/secrets.example.php` to `secrets.php` (never
 commit real secrets) and wire `call.join({ url, token })` in
 `packages/viewer/src/daily.ts` once you want it.
 
-## Explicitly out of scope (per spec)
+## Doorbell: setup
+
+The reception app's "Press for assistance" button needs three things set
+up on the actual hosting before it does anything (right now `config.json`'s
+`push.*` fields are all placeholders):
+
+1. Generate a VAPID key pair (one-time, needs Node which you already have):
+   ```
+   npx web-push generate-vapid-keys
+   ```
+   Put the public key in the hosted `config.json`'s `push.vapidPublicKey`,
+   and both keys in `server/secrets.php` (`VAPID_PUBLIC_KEY` /
+   `VAPID_PRIVATE_KEY` — copy from `secrets.example.php` if you haven't
+   already for the token-minting stub).
+2. Pick a random string for `push.notifySecret` in `config.json`, and put
+   the *same* string in `secrets.php` as `DOORBELL_SHARED_SECRET` — this
+   stops the notify endpoint being a fully open URL anyone could hit.
+3. Upload `server/subscribe.php` and `server/notify-doorbell.php` to the
+   hosting alongside `mint-token.php`, then run `composer install` in that
+   directory (needs the `minishlink/web-push` package declared in
+   `server/composer.json`) so `vendor/autoload.php` exists.
+4. Point `config.json`'s `push.subscribeUrl` / `push.notifyUrl` at those
+   two uploaded files' real URLs.
+
+Once that's done: open the viewer, click "Enable doorbell notifications"
+once (grants the browser permission + registers the subscription), then
+pressing the tablet's doorbell button should trigger a push notification
+even with the viewer tab closed. `server/push-subscriptions.json` is where
+subscriptions get stored — it's created automatically on first subscribe,
+gitignored, never needs to be touched by hand.
+
+## Explicitly out of scope (per original spec — some since revisited)
 
 - Auto-answer "phone call" style incoming-call UI
-- Motion-triggered quality ramp-up
 - Always-on microphone
 - Raw/self-hosted WebRTC signaling server
+- ~~Motion-triggered quality ramp-up~~ — being revisited: see the open
+  "selectable operating mode" item below. The doorbell button is a
+  deliberately different, simpler thing (an explicit visitor action, not
+  automatic detection) and doesn't reverse this on its own.
+
+## Still open / not yet built
+
+- **Selectable operating mode** (constant / motion-wake / doorbell-only):
+  needs design decisions first — wake-hold duration, motion sensitivity,
+  whether motion detection runs locally before ever joining Daily (to avoid
+  burning room-minutes while idle).
+- **Remote camera-switch control** on the viewer (flip the tablet's
+  front/back camera remotely).
+- **Kiosk-lock** so the reception app can't be minimized without a PIN —
+  needs the app set as Android Device Owner (one-time ADB provisioning,
+  ideally on a freshly factory-reset tablet).

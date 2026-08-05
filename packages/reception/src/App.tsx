@@ -20,6 +20,7 @@ export default function App() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
   const remoteVideoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [doorbellState, setDoorbellState] = useState<"idle" | "ringing" | "rung">("idle");
 
   useEffect(() => {
     void keepScreenAwake();
@@ -116,6 +117,14 @@ export default function App() {
     };
   }, []);
 
+  const pressDoorbell = async () => {
+    if (doorbellState !== "idle") return;
+    setDoorbellState("ringing");
+    await roomRef.current?.ringDoorbell();
+    setDoorbellState("rung");
+    setTimeout(() => setDoorbellState("idle"), 4000);
+  };
+
   return (
     <div
       style={{
@@ -136,6 +145,7 @@ export default function App() {
         {now.toLocaleTimeString()}
       </div>
       <StatusPill status={status} />
+      <DoorbellButton state={doorbellState} onPress={pressDoorbell} />
       <audio ref={remoteAudioRef} autoPlay />
       <video
         ref={remoteVideoRef}
@@ -171,6 +181,40 @@ export default function App() {
         }}
       />
     </div>
+  );
+}
+
+function DoorbellButton({
+  state,
+  onPress,
+}: {
+  state: "idle" | "ringing" | "rung";
+  onPress: () => void;
+}) {
+  const label = {
+    idle: "Press for assistance",
+    ringing: "Notifying…",
+    rung: "Someone will be with you shortly",
+  }[state];
+
+  return (
+    <button
+      onClick={onPress}
+      disabled={state !== "idle"}
+      style={{
+        padding: "14px 28px",
+        borderRadius: 999,
+        border: "none",
+        fontSize: 16,
+        fontWeight: 600,
+        cursor: state === "idle" ? "pointer" : "default",
+        background: state === "rung" ? "#2e7d32" : "#1565c0",
+        color: "#fff",
+        opacity: state === "ringing" ? 0.7 : 1,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

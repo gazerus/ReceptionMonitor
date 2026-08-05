@@ -12,6 +12,7 @@ function isAppConfig(value: unknown): value is AppConfig {
     typeof v.schedule === "object" &&
     typeof v.allowlist === "object" &&
     typeof v.video === "object" &&
+    typeof v.push === "object" &&
     typeof v.talkSessionTimeoutSeconds === "number"
   );
 }
