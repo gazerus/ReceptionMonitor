@@ -3,8 +3,7 @@ dist/
 .DS_Store
 *.log
 
-# Capacitor native projects (generated via `npx cap add android`)
-packages/reception/android/
+# Capacitor iOS project (not built for this device, generate with `npx cap add ios` if needed)
 packages/reception/ios/
 
 # Server secrets — never commit real credentials

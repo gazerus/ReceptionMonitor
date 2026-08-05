@@ -71,24 +71,72 @@ to the hosted config JSON, not rebuilds:
    Android OEM background restrictions suspending the camera. Needs
    real-device power-draw testing to confirm it's acceptable; if not, that
    file is the only thing to change.
-3. **Daily.co account**: not yet created — nothing here has been tested
-   against a live room. `room.roomUrl` in the config is a placeholder.
+3. **Daily.co room**: created — `https://kwikvid.daily.co/ManningSt`, set to
+   **public** for now so the app can be tested without wiring up token
+   minting. Set it back to private once `server/mint-token.php` is actually
+   deployed and wired in, or accept the client-side allowlist gate as
+   "good enough" for an internal single-purpose tool.
 4. **Resolution/framerate**: defaulted to ambient **320×240 @ 3fps**, talk
    **640×480 @ 15fps**, per the spec's starting numbers. Tune after testing
    on actual office WiFi.
 
-## Before first real test
+## Status
 
-1. Create the Daily.co account + a room, get an API key.
-2. Host a `config.json` (based on `config.default.json`) somewhere reachable
-   over HTTPS — the existing UpTime cPanel site works fine for this static
-   file — and set `VITE_CONFIG_URL` for both apps' builds to point at it.
-3. `cd packages/reception && npx cap add android` to generate the native
-   Android project (not generated here — needs the Android SDK/Studio), then
-   build and test on the actual tablet for power draw and background
-   behavior.
-4. Deploy `packages/viewer/dist` as a static page Garry can open from his
-   phone/desktop browser.
+- **Viewer**: deployed and reachable at
+  **https://gazerus.github.io/ReceptionMonitor/** (auto-redeploys on every
+  push to `packages/viewer` or `packages/shared` via
+  `.github/workflows/deploy-viewer.yml`). Confirmed working — email gate,
+  connects to the room.
+- **Reception app**: the native Android project is committed at
+  `packages/reception/android/` (generated via `npx cap add android`, with
+  the two Capacitor-doesn't-do-this-for-you patches already applied — see
+  below). Not yet built onto a physical tablet.
+
+## Building the reception app onto the tablet
+
+The native Android project is already in the repo, patched and ready —
+you shouldn't need to run `cap add android` yourself unless you want to
+regenerate it from scratch.
+
+1. Clone the repo and check out this branch, then from the repo root:
+   ```
+   npm install
+   npm run build:shared
+   npm run build -w packages/reception
+   ```
+2. Sync the freshly built web assets into the native project:
+   ```
+   cd packages/reception
+   npx cap sync android
+   ```
+3. Open `packages/reception/android` in Android Studio (`npx cap open
+   android` does this for you if the CLI can find your Android Studio
+   install).
+4. Plug in the tablet via USB with Developer Options + USB debugging
+   enabled, select it as the run target, and press Run (▶). Android Studio
+   handles signing/installing a debug build automatically.
+5. On first launch the app requests camera + microphone permissions —
+   accept both, or the feed will just stay black with no visible error.
+
+Two Android-specific things were needed beyond stock Capacitor output,
+already applied in the committed project:
+- `AndroidManifest.xml` — added `CAMERA`, `RECORD_AUDIO`, and `WAKE_LOCK`
+  permissions (Capacitor's manifest only ever includes `INTERNET` by
+  default).
+- `MainActivity.java` — added an explicit runtime permission request for
+  camera/mic on launch. Capacitor's WebView only grants a page's
+  `getUserMedia()` call if the underlying Android permission is *already*
+  held — unlike a plugin such as `@capacitor/camera`, nothing prompts for
+  it automatically when your JS just calls `getUserMedia` directly (which
+  is what `daily-js` does under the hood), so without this the camera
+  would silently never come on.
+
+**Since the schedule defaults to 08:00–16:00 Mon–Fri**, the app will just
+sit on "Outside monitoring hours" outside that window — to test
+immediately regardless of time of day, temporarily widen
+`packages/shared/src/config.default.json`'s `schedule.start`/`end` (or
+point `VITE_CONFIG_URL` at a hosted config with wider hours), rebuild step
+1, and narrow it back once you've confirmed it works.
 
 ## Optional hardening: server-side access control
 
