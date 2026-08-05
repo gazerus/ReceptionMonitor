@@ -15,6 +15,7 @@ export default function App() {
   const roomRef = useRef<ReceptionRoom | null>(null);
   const configRef = useRef<AppConfig | null>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     void keepScreenAwake();
@@ -67,6 +68,11 @@ export default function App() {
             previewRef.current.srcObject = track ? new MediaStream([track]) : null;
           }
         },
+        (track) => {
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = track ? new MediaStream([track]) : null;
+          }
+        },
       );
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
@@ -105,6 +111,7 @@ export default function App() {
         {now.toLocaleTimeString()}
       </div>
       <StatusPill status={status} />
+      <audio ref={remoteAudioRef} autoPlay />
       <video
         ref={previewRef}
         autoPlay

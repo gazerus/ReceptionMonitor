@@ -27,6 +27,7 @@ export class ReceptionRoom {
     private config: AppConfig,
     private onCameraError?: (error: unknown) => void,
     private onLocalVideoTrack?: (track: MediaStreamTrack | null) => void,
+    private onRemoteAudioTrack?: (track: MediaStreamTrack | null) => void,
   ) {}
 
   updateConfig(config: AppConfig) {
@@ -51,6 +52,8 @@ export class ReceptionRoom {
     call.on("camera-error", this.handleCameraError);
     call.on("track-started", this.handleLocalTrackStarted);
     call.on("track-stopped", this.handleLocalTrackStopped);
+    call.on("track-started", this.handleRemoteTrackStarted);
+    call.on("track-stopped", this.handleRemoteTrackStopped);
 
     try {
       // startAudioOff/startVideoOff are accepted independently by both
@@ -71,6 +74,8 @@ export class ReceptionRoom {
       call.off("camera-error", this.handleCameraError);
       call.off("track-started", this.handleLocalTrackStarted);
       call.off("track-stopped", this.handleLocalTrackStopped);
+      call.off("track-started", this.handleRemoteTrackStarted);
+      call.off("track-stopped", this.handleRemoteTrackStopped);
       call.destroy();
       throw err;
     }
@@ -99,6 +104,8 @@ export class ReceptionRoom {
     this.call.off("camera-error", this.handleCameraError);
     this.call.off("track-started", this.handleLocalTrackStarted);
     this.call.off("track-stopped", this.handleLocalTrackStopped);
+    this.call.off("track-started", this.handleRemoteTrackStarted);
+    this.call.off("track-stopped", this.handleRemoteTrackStopped);
     await this.call.leave();
     this.call.destroy();
     this.call = null;
@@ -149,6 +156,21 @@ export class ReceptionRoom {
     );
     if (!event?.participant?.local || event.track.kind !== "video") return;
     this.onLocalVideoTrack?.(null);
+  };
+
+  // Daily's call-object mode auto-subscribes to remote tracks by default,
+  // but subscribing isn't the same as playing: nothing attaches the
+  // viewer's incoming mic audio to an actual audio element unless we do it
+  // ourselves. Without this, pressing Talk on the viewer changes nothing
+  // audible on the tablet even though the audio genuinely arrives.
+  private handleRemoteTrackStarted = (event?: DailyEventObjectTrack) => {
+    if (event?.participant?.local || event?.track?.kind !== "audio") return;
+    this.onRemoteAudioTrack?.(event.track);
+  };
+
+  private handleRemoteTrackStopped = (event?: DailyEventObjectTrack) => {
+    if (event?.participant?.local || event?.track?.kind !== "audio") return;
+    this.onRemoteAudioTrack?.(null);
   };
 
   private async applyAmbientQuality(): Promise<void> {
