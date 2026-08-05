@@ -7,7 +7,7 @@ const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
 
-type Status = "loading" | "waiting" | "live" | "error";
+type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
 export default function App() {
   const [status, setStatus] = useState<Status>("loading");
@@ -55,7 +55,10 @@ export default function App() {
     (async () => {
       await refreshConfig();
       if (cancelled || !configRef.current) return;
-      roomRef.current = new ReceptionRoom(configRef.current);
+      roomRef.current = new ReceptionRoom(configRef.current, (err) => {
+        console.error("[camera] failed to acquire camera/mic:", err);
+        setStatus("no-camera");
+      });
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
 
@@ -102,12 +105,14 @@ function StatusPill({ status }: { status: Status }) {
     waiting: "Outside monitoring hours",
     live: "Monitoring active",
     error: "Connection issue — retrying",
+    "no-camera": "No camera — check app permissions",
   };
   const color: Record<Status, string> = {
     loading: "#888",
     waiting: "#555",
     live: "#2e7d32",
     error: "#b71c1c",
+    "no-camera": "#e65100",
   };
   return (
     <div

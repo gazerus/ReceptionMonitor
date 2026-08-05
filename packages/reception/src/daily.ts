@@ -19,7 +19,10 @@ export class ReceptionRoom {
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private config: AppConfig) {}
+  constructor(
+    private config: AppConfig,
+    private onCameraError?: (error: unknown) => void,
+  ) {}
 
   updateConfig(config: AppConfig) {
     this.config = config;
@@ -40,6 +43,7 @@ export class ReceptionRoom {
       startVideoOff: false,
     });
     call.on("app-message", this.handleAppMessage);
+    call.on("camera-error", this.handleCameraError);
 
     try {
       await call.join({ url: this.config.room.roomUrl });
@@ -48,6 +52,7 @@ export class ReceptionRoom {
       // actually joined — that would make isJoined true and stop the
       // schedule loop from ever retrying.
       call.off("app-message", this.handleAppMessage);
+      call.off("camera-error", this.handleCameraError);
       call.destroy();
       throw err;
     }
@@ -61,6 +66,7 @@ export class ReceptionRoom {
     if (!this.call) return;
     this.clearTalkTimeout();
     this.call.off("app-message", this.handleAppMessage);
+    this.call.off("camera-error", this.handleCameraError);
     await this.call.leave();
     this.call.destroy();
     this.call = null;
@@ -73,6 +79,16 @@ export class ReceptionRoom {
     } else if (event.data.type === "talk-end") {
       void this.endTalkSession();
     }
+  };
+
+  // Daily doesn't fail join() over a camera/mic acquisition problem — it
+  // just joins without that track and emits this instead. Without
+  // surfacing it, the app would sit on "Monitoring active" while silently
+  // publishing no video, with nothing on the tablet or in the viewer
+  // hinting at why — exactly the failure mode an unattended kiosk device
+  // most needs to avoid.
+  private handleCameraError = (event?: unknown) => {
+    this.onCameraError?.(event);
   };
 
   private async applyAmbientQuality(): Promise<void> {

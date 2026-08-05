@@ -13,8 +13,10 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [talking, setTalking] = useState(false);
+  const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
+  const streamRef = useRef<MediaStream>(new MediaStream());
 
   useEffect(() => {
     void loadAppConfig(CONFIG_URL).then(setConfig);
@@ -31,23 +33,41 @@ export default function App() {
 
     const room = new ViewerRoom();
     roomRef.current = room;
+    const stream = streamRef.current;
 
-    const handleTrack = (event?: DailyEventObjectTrack) => {
+    const handleTrackStarted = (event?: DailyEventObjectTrack) => {
       if (!event || event.participant?.local) return;
-      if (event.track.kind !== "video") return;
-      if (videoRef.current) {
-        videoRef.current.srcObject = new MediaStream([event.track]);
+      stream.addTrack(event.track);
+      if (event.track.kind === "audio") setRemoteAudioActive(true);
+      if (videoRef.current && videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
       }
+      // Autoplay policies can silently block playback that isn't tied to a
+      // user gesture; the srcObject assignment above happens async inside a
+      // WebRTC callback, so explicitly (re)try play() and log if blocked
+      // rather than leaving the pane looking "connected" but black with no
+      // visible reason why.
+      videoRef.current?.play().catch((err) => console.warn("[viewer] video.play() blocked:", err));
+    };
+
+    const handleTrackStopped = (event?: DailyEventObjectTrack) => {
+      if (!event || event.participant?.local) return;
+      stream.removeTrack(event.track);
+      if (event.track.kind === "audio") setRemoteAudioActive(false);
     };
 
     (async () => {
       const call = await room.join(config.room.roomUrl);
-      call.on("track-started", handleTrack);
+      call.on("track-started", handleTrackStarted);
+      call.on("track-stopped", handleTrackStopped);
       setConnected(true);
     })();
 
     return () => {
-      roomRef.current?.callObject?.off("track-started", handleTrack);
+      const call = roomRef.current?.callObject;
+      call?.off("track-started", handleTrackStarted);
+      call?.off("track-stopped", handleTrackStopped);
+      stream.getTracks().forEach((t) => stream.removeTrack(t));
       void room.leave();
       setConnected(false);
     };
@@ -106,7 +126,12 @@ export default function App() {
         ref={videoRef}
         autoPlay
         playsInline
-        muted={false}
+        // Ambient mode never carries audio, and mobile browsers routinely
+        // block unmuted autoplay outside a direct user gesture. Stay muted
+        // until a talk session actually attaches an audio track, then
+        // un-mute — toggling an already-playing element's `muted` state
+        // isn't subject to the same restriction as starting unmuted.
+        muted={!remoteAudioActive}
         style={{ flex: 1, objectFit: "contain", background: "#000" }}
       />
       <div style={{ padding: 16, display: "flex", justifyContent: "center", gap: 12 }}>
