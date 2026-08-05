@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Capacitor native projects (generated via `npx cap add android`)
+packages/reception/android/
+packages/reception/ios/
+
+# Server secrets — never commit real credentials
+server/secrets.php
+server/config.json

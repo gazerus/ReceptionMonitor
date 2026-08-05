@@ -1,0 +1,19 @@
+{
+  "name": "reception-ambient-video",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/shared",
+    "packages/reception",
+    "packages/viewer"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w packages/shared",
+    "build:reception": "npm run build -w packages/reception",
+    "build:viewer": "npm run build -w packages/viewer",
+    "build": "npm run build:shared && npm run build:reception && npm run build:viewer",
+    "dev:reception": "npm run dev -w packages/reception",
+    "dev:viewer": "npm run dev -w packages/viewer",
+    "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w packages/reception && npm run typecheck -w packages/viewer"
+  }
+}

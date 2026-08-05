@@ -1,0 +1,19 @@
+{
+  "room": {
+    "roomUrl": "https://YOUR-DAILY-DOMAIN.daily.co/reception"
+  },
+  "schedule": {
+    "timezone": "Australia/Brisbane",
+    "daysOfWeek": [1, 2, 3, 4, 5],
+    "start": "08:00",
+    "end": "16:00"
+  },
+  "allowlist": {
+    "viewers": ["grd411@gmail.com"]
+  },
+  "video": {
+    "ambient": { "width": 320, "height": 240, "frameRate": 3 },
+    "talk": { "width": 640, "height": 480, "frameRate": 15 }
+  },
+  "talkSessionTimeoutSeconds": 300
+}
