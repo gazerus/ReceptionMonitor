@@ -33,16 +33,26 @@ export class ReceptionRoom {
   async joinAmbient(): Promise<void> {
     if (this.call) return;
 
-    this.call = Daily.createCallObject({
+    const call = Daily.createCallObject({
       // The mic device is acquired but kept muted so a talk request can
       // unmute instantly with no renegotiation delay.
       startAudioOff: true,
       startVideoOff: false,
     });
+    call.on("app-message", this.handleAppMessage);
 
-    this.call.on("app-message", this.handleAppMessage);
+    try {
+      await call.join({ url: this.config.room.roomUrl });
+    } catch (err) {
+      // Don't leave `this.call` pointing at a call object that never
+      // actually joined — that would make isJoined true and stop the
+      // schedule loop from ever retrying.
+      call.off("app-message", this.handleAppMessage);
+      call.destroy();
+      throw err;
+    }
 
-    await this.call.join({ url: this.config.room.roomUrl });
+    this.call = call;
     await this.applyAmbientQuality();
   }
 
