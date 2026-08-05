@@ -1,4 +1,8 @@
-import Daily, { type DailyCall, type DailyEventObjectAppMessage } from "@daily-co/daily-js";
+import Daily, {
+  type DailyCall,
+  type DailyEventObjectAppMessage,
+  type DailyEventObjectTrack,
+} from "@daily-co/daily-js";
 import type { AppConfig } from "@reception/shared";
 
 export type TalkRequestMessage = { type: "talk-request" };
@@ -22,6 +26,7 @@ export class ReceptionRoom {
   constructor(
     private config: AppConfig,
     private onCameraError?: (error: unknown) => void,
+    private onLocalVideoTrack?: (track: MediaStreamTrack | null) => void,
   ) {}
 
   updateConfig(config: AppConfig) {
@@ -44,6 +49,8 @@ export class ReceptionRoom {
     });
     call.on("app-message", this.handleAppMessage);
     call.on("camera-error", this.handleCameraError);
+    call.on("track-started", this.handleLocalTrackStarted);
+    call.on("track-stopped", this.handleLocalTrackStopped);
 
     try {
       await call.join({ url: this.config.room.roomUrl });
@@ -53,6 +60,8 @@ export class ReceptionRoom {
       // schedule loop from ever retrying.
       call.off("app-message", this.handleAppMessage);
       call.off("camera-error", this.handleCameraError);
+      call.off("track-started", this.handleLocalTrackStarted);
+      call.off("track-stopped", this.handleLocalTrackStopped);
       call.destroy();
       throw err;
     }
@@ -67,6 +76,8 @@ export class ReceptionRoom {
     this.clearTalkTimeout();
     this.call.off("app-message", this.handleAppMessage);
     this.call.off("camera-error", this.handleCameraError);
+    this.call.off("track-started", this.handleLocalTrackStarted);
+    this.call.off("track-stopped", this.handleLocalTrackStopped);
     await this.call.leave();
     this.call.destroy();
     this.call = null;
@@ -89,6 +100,20 @@ export class ReceptionRoom {
   // most needs to avoid.
   private handleCameraError = (event?: unknown) => {
     this.onCameraError?.(event);
+  };
+
+  // Surfaces the local camera track (if any) so App.tsx can render a small
+  // self-preview -- the only way to see, from the tablet itself, whether
+  // the camera is actually producing frames rather than just having
+  // "joined" successfully with a dead or black track.
+  private handleLocalTrackStarted = (event?: DailyEventObjectTrack) => {
+    if (!event?.participant?.local || event.track.kind !== "video") return;
+    this.onLocalVideoTrack?.(event.track);
+  };
+
+  private handleLocalTrackStopped = (event?: DailyEventObjectTrack) => {
+    if (!event?.participant?.local || event.track.kind !== "video") return;
+    this.onLocalVideoTrack?.(null);
   };
 
   private async applyAmbientQuality(): Promise<void> {

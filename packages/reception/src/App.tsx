@@ -14,6 +14,7 @@ export default function App() {
   const [now, setNow] = useState(() => new Date());
   const roomRef = useRef<ReceptionRoom | null>(null);
   const configRef = useRef<AppConfig | null>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     void keepScreenAwake();
@@ -55,10 +56,18 @@ export default function App() {
     (async () => {
       await refreshConfig();
       if (cancelled || !configRef.current) return;
-      roomRef.current = new ReceptionRoom(configRef.current, (err) => {
-        console.error("[camera] failed to acquire camera/mic:", err);
-        setStatus("no-camera");
-      });
+      roomRef.current = new ReceptionRoom(
+        configRef.current,
+        (err) => {
+          console.error("[camera] failed to acquire camera/mic:", err);
+          setStatus("no-camera");
+        },
+        (track) => {
+          if (previewRef.current) {
+            previewRef.current.srcObject = track ? new MediaStream([track]) : null;
+          }
+        },
+      );
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
 
@@ -79,6 +88,7 @@ export default function App() {
   return (
     <div
       style={{
+        position: "relative",
         height: "100%",
         display: "flex",
         flexDirection: "column",
@@ -95,6 +105,23 @@ export default function App() {
         {now.toLocaleTimeString()}
       </div>
       <StatusPill status={status} />
+      <video
+        ref={previewRef}
+        autoPlay
+        muted
+        playsInline
+        style={{
+          position: "absolute",
+          bottom: 16,
+          right: 16,
+          width: 120,
+          height: 90,
+          objectFit: "cover",
+          borderRadius: 8,
+          border: "1px solid #333",
+          background: "#000",
+        }}
+      />
     </div>
   );
 }
