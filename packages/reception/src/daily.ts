@@ -68,6 +68,14 @@ export class ReceptionRoom {
 
     this.call = call;
     await this.applyAmbientQuality();
+
+    const localVideo = call.participants().local?.tracks?.video;
+    console.log(
+      "[reception] post-join local video track state:",
+      localVideo?.state,
+      "off reason:",
+      (localVideo as { off?: { reason?: string } } | undefined)?.off?.reason,
+    );
   }
 
   /** Leaves the room and fully releases the camera/mic. */
@@ -107,11 +115,25 @@ export class ReceptionRoom {
   // the camera is actually producing frames rather than just having
   // "joined" successfully with a dead or black track.
   private handleLocalTrackStarted = (event?: DailyEventObjectTrack) => {
+    console.log(
+      "[reception] track-started: local=",
+      event?.participant?.local,
+      "kind=",
+      event?.track?.kind,
+      "readyState=",
+      event?.track?.readyState,
+    );
     if (!event?.participant?.local || event.track.kind !== "video") return;
     this.onLocalVideoTrack?.(event.track);
   };
 
   private handleLocalTrackStopped = (event?: DailyEventObjectTrack) => {
+    console.log(
+      "[reception] track-stopped: local=",
+      event?.participant?.local,
+      "kind=",
+      event?.track?.kind,
+    );
     if (!event?.participant?.local || event.track.kind !== "video") return;
     this.onLocalVideoTrack?.(null);
   };
@@ -119,13 +141,13 @@ export class ReceptionRoom {
   private async applyAmbientQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.ambient;
-    await this.call.setBandwidth({ trackConstraints: { width, height, frameRate } });
+    await this.call.updateInputSettings({ video: { settings: { width, height, frameRate } } });
   }
 
   private async applyTalkQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.talk;
-    await this.call.setBandwidth({ trackConstraints: { width, height, frameRate } });
+    await this.call.updateInputSettings({ video: { settings: { width, height, frameRate } } });
   }
 
   /** Un-mutes the mic and bumps video quality for the duration of the exchange. */
