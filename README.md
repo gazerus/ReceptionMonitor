@@ -98,6 +98,14 @@ The native Android project is already in the repo, patched and ready —
 you shouldn't need to run `cap add android` yourself unless you want to
 regenerate it from scratch.
 
+**Fastest path**: with the tablet plugged in via USB (Developer Options +
+USB debugging on), run `scripts/rebuild-reception.ps1` from the repo root.
+It pulls, rebuilds, and deploys straight to the device via `cap run
+android` — no Android Studio UI required. Falls back cleanly to the
+manual steps below if that command can't find/build for a device.
+
+Manual steps, or if the script doesn't work on your machine:
+
 1. Clone the repo and check out this branch, then from the repo root:
    ```
    npm install
