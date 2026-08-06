@@ -259,6 +259,23 @@ export default function App() {
         >
           {talking ? "End" : "Talk"}
         </button>
+        {!talking && (
+          <button
+            onClick={() => roomRef.current?.switchCamera()}
+            title="Switch tablet camera"
+            style={{
+              padding: "14px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              fontSize: 16,
+              cursor: "pointer",
+              background: "#1a1a1a",
+              color: "#eee",
+            }}
+          >
+            🔄
+          </button>
+        )}
       </div>
     </div>
   );

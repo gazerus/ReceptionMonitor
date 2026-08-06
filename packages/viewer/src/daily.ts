@@ -43,4 +43,9 @@ export class ViewerRoom {
     this.call.setLocalVideo(false);
     this.call.sendAppMessage({ type: "talk-end" }, "*");
   }
+
+  /** Flips the tablet's ambient camera front/back. Only meaningful outside a talk session. */
+  switchCamera(): void {
+    this.call?.sendAppMessage({ type: "switch-camera" }, "*");
+  }
 }

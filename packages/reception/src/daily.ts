@@ -7,7 +7,8 @@ import type { AppConfig } from "@reception/shared";
 
 export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
-type SignalMessage = TalkRequestMessage | TalkEndMessage;
+export type SwitchCameraMessage = { type: "switch-camera" };
+type SignalMessage = TalkRequestMessage | TalkEndMessage | SwitchCameraMessage;
 
 function isSignalMessage(data: unknown): data is SignalMessage {
   return (
@@ -15,13 +16,17 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     data !== null &&
     "type" in data &&
     ((data as { type: unknown }).type === "talk-request" ||
-      (data as { type: unknown }).type === "talk-end")
+      (data as { type: unknown }).type === "talk-end" ||
+      (data as { type: unknown }).type === "switch-camera")
   );
 }
 
 export class ReceptionRoom {
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
+  // Ambient-mode-only; talk sessions always use the front camera regardless
+  // of this, so switching cameras mid-conversation isn't a concern.
+  private ambientFacingMode: "user" | "environment" = "user";
 
   constructor(
     private config: AppConfig,
@@ -118,6 +123,8 @@ export class ReceptionRoom {
       void this.startTalkSession();
     } else if (event.data.type === "talk-end") {
       void this.endTalkSession();
+    } else if (event.data.type === "switch-camera") {
+      void this.switchAmbientCamera();
     }
   };
 
@@ -178,20 +185,28 @@ export class ReceptionRoom {
   private async applyAmbientQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.ambient;
-    // facingMode "user" (front/selfie camera) so the tablet faces whoever
-    // walks up to the desk, rather than whatever the rear camera happens
-    // to point at.
+    // Defaults to "user" (front/selfie camera) so the tablet faces whoever
+    // walks up to the desk; switchAmbientCamera() can flip it to
+    // "environment" for a quick look around the room.
     await this.call.updateInputSettings({
-      video: { settings: { width, height, frameRate, facingMode: "user" } },
+      video: { settings: { width, height, frameRate, facingMode: this.ambientFacingMode } },
     });
   }
 
   private async applyTalkQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.talk;
+    // Always front camera for talk sessions regardless of the ambient
+    // facing mode -- the point is showing whoever's at the desk to Garry.
     await this.call.updateInputSettings({
       video: { settings: { width, height, frameRate, facingMode: "user" } },
     });
+  }
+
+  /** Flips the ambient camera between front/back. Only meaningful outside a talk session. */
+  private async switchAmbientCamera(): Promise<void> {
+    this.ambientFacingMode = this.ambientFacingMode === "user" ? "environment" : "user";
+    await this.applyAmbientQuality();
   }
 
   /** Un-mutes the mic and bumps video quality for the duration of the exchange. */
