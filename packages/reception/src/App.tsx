@@ -6,7 +6,6 @@ import { keepScreenAwake } from "./wakeLock";
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
-const TALK_VIDEO_HOLD_MS = 30_000;
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
@@ -19,7 +18,6 @@ export default function App() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
-  const remoteVideoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [doorbellState, setDoorbellState] = useState<"idle" | "rung">("idle");
 
   useEffect(() => {
@@ -79,23 +77,17 @@ export default function App() {
           }
         },
         (track) => {
-          if (remoteVideoHideTimer.current) {
-            clearTimeout(remoteVideoHideTimer.current);
-            remoteVideoHideTimer.current = null;
-          }
           if (track) {
             if (remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = new MediaStream([track]);
             }
             setShowRemoteVideo(true);
           } else {
-            // Hold the last frame on screen for a while after the talk
-            // session ends rather than snapping straight back to the
-            // ambient view.
-            remoteVideoHideTimer.current = setTimeout(() => {
-              setShowRemoteVideo(false);
-              if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-            }, TALK_VIDEO_HOLD_MS);
+            // Drop straight back to the ambient view when the talk session
+            // ends -- holding the last (now frozen, non-updating) frame on
+            // screen reads as broken rather than intentional.
+            setShowRemoteVideo(false);
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
           }
         },
       );
@@ -112,7 +104,6 @@ export default function App() {
       clearInterval(scheduleTimer);
       clearInterval(configTimer);
       clearInterval(clockTimer);
-      if (remoteVideoHideTimer.current) clearTimeout(remoteVideoHideTimer.current);
       void roomRef.current?.leave();
     };
   }, []);

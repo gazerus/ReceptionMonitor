@@ -6,6 +6,31 @@ import { ViewerRoom } from "./daily";
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SESSION_KEY = "reception-viewer-email";
 
+// Two short beeps via the Web Audio API -- no asset to ship, and reliable
+// regardless of Notification permission/OS sound settings, since this
+// only ever needs to work while the page is already open and foreground.
+function playDoorbellBeep() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    const beepAt = (startOffset: number) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + startOffset);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(ctx.currentTime + startOffset);
+      oscillator.stop(ctx.currentTime + startOffset + 0.2);
+    };
+    beepAt(0);
+    beepAt(0.3);
+  } catch (err) {
+    console.warn("[viewer] failed to play doorbell beep:", err);
+  }
+}
+
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [email, setEmail] = useState(() => sessionStorage.getItem(SESSION_KEY) ?? "");
@@ -28,6 +53,16 @@ export default function App() {
       setAuthorized(true);
     }
   }, [config, email]);
+
+  useEffect(() => {
+    // Best-effort: lets a doorbell press also fire a real OS-level
+    // notification (with its default sound) while this page is open, on
+    // top of the in-page beep/flash below. No service worker or server
+    // involved -- this only ever shows while the page itself is alive.
+    if (authorized && "Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  }, [authorized]);
 
   useEffect(() => {
     if (!authorized || !config) return;
@@ -67,6 +102,10 @@ export default function App() {
         (event.data as { type?: unknown }).type === "doorbell"
       ) {
         setDoorbellAlert(true);
+        playDoorbellBeep();
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("SET Reception", { body: "Someone is at reception." });
+        }
         setTimeout(() => setDoorbellAlert(false), 10_000);
       }
     };
@@ -128,13 +167,14 @@ export default function App() {
     );
   }
 
-  const startTalk = () => {
-    void roomRef.current?.startTalk(true);
-    setTalking(true);
-  };
-  const endTalk = () => {
-    roomRef.current?.endTalk();
-    setTalking(false);
+  const toggleTalk = () => {
+    if (talking) {
+      roomRef.current?.endTalk();
+      setTalking(false);
+    } else {
+      void roomRef.current?.startTalk(true);
+      setTalking(true);
+    }
   };
 
   return (
@@ -156,6 +196,7 @@ export default function App() {
         ref={videoRef}
         autoPlay
         playsInline
+        className={doorbellAlert ? "doorbell-flash" : undefined}
         // Ambient mode never carries audio, and mobile browsers routinely
         // block unmuted autoplay outside a direct user gesture. Stay muted
         // until a talk session actually attaches an audio track, then
@@ -169,17 +210,7 @@ export default function App() {
           {connected ? "Connected" : "Connecting…"}
         </span>
         <button
-          onMouseDown={startTalk}
-          onMouseUp={endTalk}
-          onMouseLeave={() => talking && endTalk()}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            startTalk();
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            endTalk();
-          }}
+          onClick={toggleTalk}
           style={{
             padding: "14px 32px",
             borderRadius: 999,
@@ -192,7 +223,7 @@ export default function App() {
             userSelect: "none",
           }}
         >
-          {talking ? "Talking… release to end" : "Hold to talk"}
+          {talking ? "End" : "Talk"}
         </button>
       </div>
     </div>

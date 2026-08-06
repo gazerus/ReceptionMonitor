@@ -7,6 +7,13 @@
     <style>
       html, body, #root { height: 100%; margin: 0; background: #111; }
       body { font-family: system-ui, sans-serif; }
+      @keyframes doorbell-flash {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(2.2) saturate(1.5); }
+      }
+      .doorbell-flash {
+        animation: doorbell-flash 0.5s ease-in-out infinite;
+      }
     </style>
   </head>
   <body>
