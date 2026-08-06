@@ -175,11 +175,22 @@ export default function App() {
       }}
     >
       <div style={{ fontSize: 20, letterSpacing: 1, opacity: 0.7 }}>SET Reception Monitor</div>
-      <div style={{ fontSize: 48, fontVariantNumeric: "tabular-nums" }}>
-        {now.toLocaleTimeString()}
-      </div>
       <StatusPill status={status} />
       <DoorbellButton state={doorbellState} onPress={pressDoorbell} />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 34,
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontSize: 28,
+          fontVariantNumeric: "tabular-nums",
+          opacity: 0.85,
+          zIndex: 10,
+        }}
+      >
+        {now.toLocaleTimeString()}
+      </div>
       <audio ref={remoteAudioRef} autoPlay />
       <video
         ref={remoteVideoRef}
