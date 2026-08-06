@@ -15,11 +15,5 @@
     "ambient": { "width": 320, "height": 240, "frameRate": 3 },
     "talk": { "width": 640, "height": 480, "frameRate": 15 }
   },
-  "push": {
-    "vapidPublicKey": "REPLACE-WITH-GENERATED-VAPID-PUBLIC-KEY",
-    "subscribeUrl": "https://YOUR-CPANEL-SITE/subscribe.php",
-    "notifyUrl": "https://YOUR-CPANEL-SITE/notify-doorbell.php",
-    "notifySecret": "REPLACE-WITH-A-RANDOM-STRING"
-  },
   "talkSessionTimeoutSeconds": 300
 }

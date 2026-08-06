@@ -223,20 +223,11 @@ export class ReceptionRoom {
 
   /**
    * Called when a visitor presses the on-screen doorbell button. Signals
-   * any viewer currently connected to the room directly, and separately
-   * hits the notify endpoint so Garry gets a push notification even if the
-   * viewer page isn't open at all -- the whole point of a doorbell.
+   * any viewer currently connected to the room -- only reaches Garry if the
+   * viewer page happens to be open, by design: no server-side push
+   * infrastructure to stand up or maintain for this.
    */
-  async ringDoorbell(): Promise<void> {
+  ringDoorbell(): void {
     this.call?.sendAppMessage({ type: "doorbell" }, "*");
-
-    try {
-      await fetch(this.config.push.notifyUrl, {
-        method: "POST",
-        headers: { "X-Doorbell-Secret": this.config.push.notifySecret },
-      });
-    } catch (err) {
-      console.error("[doorbell] failed to reach notify endpoint:", err);
-    }
   }
 }

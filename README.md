@@ -17,9 +17,7 @@ packages/
               ambient video, listens for talk requests
   viewer/     Plain Vite + React + TS web page — Garry's side, subscribe-only + Talk button
 server/
-  mint-token.php       Optional server-side access control upgrade (see below)
-  subscribe.php        Stores a viewer's Web Push subscription for the doorbell
-  notify-doorbell.php  Sends the Web Push notification when the doorbell is pressed
+  mint-token.php   Optional server-side access control upgrade (see below)
 ```
 
 Uses [Daily.co](https://daily.co) as the WebRTC SDK (signaling + TURN handled
@@ -48,15 +46,18 @@ for the shape.
   `updateInputSettings` and toggling the mic. Plays the viewer's incoming
   audio out loud, and shows the viewer's video full-screen during a talk
   session (holding 30s after it ends) with a small self-preview thumbnail
-  always visible. Has an on-screen doorbell button for when nobody's
-  watching the viewer. Keeps the screen awake via
-  `@capacitor-community/keep-awake`.
+  always visible. Has an on-screen doorbell button ("Press for assistance")
+  for when nobody's watching the viewer — signals any connected viewer via
+  the same Daily message channel used for talk requests; deliberately no
+  server-side push infrastructure behind it, so it only reaches you if the
+  viewer page happens to be open (see "Explicitly out of scope" below —
+  this was a conscious trade-off to keep the app self-contained). Keeps the
+  screen awake via `@capacitor-community/keep-awake`.
 - **Viewer**: fetches the same config, gates access with an email check
   against the allowlist, joins subscribe-only (no local mic/camera sent
-  until Talk is pressed), renders the reception feed, and has a hold-to-talk
-  button that publishes mic + front camera and signals the tablet. Can
-  subscribe to Web Push notifications so the doorbell reaches your phone
-  even with the tab closed.
+  until Talk is pressed), renders the reception feed, has a hold-to-talk
+  button that publishes mic + front camera and signals the tablet, and
+  shows a banner when the doorbell is pressed while connected.
 - **Access control**: allowlist is a plain array of emails in the shared
   config — starts with just Garry, and adding Sonja/Richie/Shane later is a
   one-line JSON edit, no code change.
@@ -170,42 +171,16 @@ viewer app yet — copy `server/secrets.example.php` to `secrets.php` (never
 commit real secrets) and wire `call.join({ url, token })` in
 `packages/viewer/src/daily.ts` once you want it.
 
-## Doorbell: setup
-
-The reception app's "Press for assistance" button needs three things set
-up on the actual hosting before it does anything (right now `config.json`'s
-`push.*` fields are all placeholders):
-
-1. Generate a VAPID key pair (one-time, needs Node which you already have):
-   ```
-   npx web-push generate-vapid-keys
-   ```
-   Put the public key in the hosted `config.json`'s `push.vapidPublicKey`,
-   and both keys in `server/secrets.php` (`VAPID_PUBLIC_KEY` /
-   `VAPID_PRIVATE_KEY` — copy from `secrets.example.php` if you haven't
-   already for the token-minting stub).
-2. Pick a random string for `push.notifySecret` in `config.json`, and put
-   the *same* string in `secrets.php` as `DOORBELL_SHARED_SECRET` — this
-   stops the notify endpoint being a fully open URL anyone could hit.
-3. Upload `server/subscribe.php` and `server/notify-doorbell.php` to the
-   hosting alongside `mint-token.php`, then run `composer install` in that
-   directory (needs the `minishlink/web-push` package declared in
-   `server/composer.json`) so `vendor/autoload.php` exists.
-4. Point `config.json`'s `push.subscribeUrl` / `push.notifyUrl` at those
-   two uploaded files' real URLs.
-
-Once that's done: open the viewer, click "Enable doorbell notifications"
-once (grants the browser permission + registers the subscription), then
-pressing the tablet's doorbell button should trigger a push notification
-even with the viewer tab closed. `server/push-subscriptions.json` is where
-subscriptions get stored — it's created automatically on first subscribe,
-gitignored, never needs to be touched by hand.
-
 ## Explicitly out of scope (per original spec — some since revisited)
 
 - Auto-answer "phone call" style incoming-call UI
 - Always-on microphone
 - Raw/self-hosted WebRTC signaling server
+- Push notifications that reach you with the viewer closed — considered for
+  the doorbell, deliberately dropped to avoid needing a server-side
+  component to build and maintain. The doorbell only alerts a viewer that's
+  already open and connected. Revisit with a third-party push service
+  (OneSignal etc.) or a serverless function if this changes.
 - ~~Motion-triggered quality ramp-up~~ — being revisited: see the open
   "selectable operating mode" item below. The doorbell button is a
   deliberately different, simpler thing (an explicit visitor action, not

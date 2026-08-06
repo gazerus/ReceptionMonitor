@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { DailyEventObjectAppMessage, DailyEventObjectTrack } from "@daily-co/daily-js";
 import { loadAppConfig, isAllowedViewer, type AppConfig } from "@reception/shared";
 import { ViewerRoom } from "./daily";
-import { registerServiceWorker, subscribeToPush } from "./push";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SESSION_KEY = "reception-viewer-email";
-const PUSH_SUBSCRIBED_KEY_PREFIX = "reception-push-subscribed:";
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -16,7 +14,6 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [talking, setTalking] = useState(false);
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
@@ -31,11 +28,6 @@ export default function App() {
       setAuthorized(true);
     }
   }, [config, email]);
-
-  useEffect(() => {
-    if (!authorized || !email) return;
-    setPushEnabled(localStorage.getItem(PUSH_SUBSCRIBED_KEY_PREFIX + email) === "true");
-  }, [authorized, email]);
 
   useEffect(() => {
     if (!authorized || !config) return;
@@ -65,9 +57,8 @@ export default function App() {
       if (event.track.kind === "audio") setRemoteAudioActive(false);
     };
 
-    // Push notifications reach you even with the page closed, but if it's
-    // already open (and possibly focused, where a push notification may be
-    // suppressed by the OS/browser), this is the redundant in-page signal.
+    // Doorbell alert: only fires if this page is open and connected --
+    // deliberately no server-side push infrastructure behind this.
     const handleAppMessage = (event?: DailyEventObjectAppMessage) => {
       if (
         event &&
@@ -146,16 +137,6 @@ export default function App() {
     setTalking(false);
   };
 
-  const enableNotifications = async () => {
-    const registration = await registerServiceWorker();
-    if (!registration) return;
-    const ok = await subscribeToPush(registration, config.push.vapidPublicKey, config.push.subscribeUrl, email);
-    if (ok) {
-      localStorage.setItem(PUSH_SUBSCRIBED_KEY_PREFIX + email, "true");
-      setPushEnabled(true);
-    }
-  };
-
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#111" }}>
       {doorbellAlert && (
@@ -170,23 +151,6 @@ export default function App() {
         >
           🔔 Someone is at reception
         </div>
-      )}
-      {!pushEnabled && (
-        <button
-          onClick={() => void enableNotifications()}
-          style={{
-            margin: 8,
-            padding: "8px 12px",
-            borderRadius: 6,
-            border: "1px solid #444",
-            background: "#1a1a1a",
-            color: "#eee",
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          Enable doorbell notifications
-        </button>
       )}
       <video
         ref={videoRef}

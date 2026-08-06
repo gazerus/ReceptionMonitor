@@ -9,6 +9,3 @@ packages/reception/ios/
 # Server secrets — never commit real credentials
 server/secrets.php
 server/config.json
-server/vendor/
-server/composer.lock
-server/push-subscriptions.json
