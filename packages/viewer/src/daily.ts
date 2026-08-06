@@ -43,4 +43,13 @@ export class ViewerRoom {
     this.call.setLocalVideo(false);
     this.call.sendAppMessage({ type: "talk-end" }, "*");
   }
+
+  /**
+   * Asks the reception tablet to turn its ambient video on outside its
+   * normal scheduled hours. The tablet stays connected to the room 24/7
+   * specifically so this reaches it instantly, with no server involved.
+   */
+  checkIn(): void {
+    this.call?.sendAppMessage({ type: "wake-request" }, "*");
+  }
 }

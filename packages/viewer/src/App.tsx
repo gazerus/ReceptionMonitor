@@ -40,6 +40,7 @@ export default function App() {
   const [talking, setTalking] = useState(false);
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
+  const [checkInState, setCheckInState] = useState<"idle" | "sent">("idle");
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
@@ -193,6 +194,13 @@ export default function App() {
     }
   };
 
+  const checkIn = () => {
+    if (checkInState !== "idle") return;
+    roomRef.current?.checkIn();
+    setCheckInState("sent");
+    setTimeout(() => setCheckInState("idle"), 5000);
+  };
+
   return (
     <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", background: "#111" }}>
       {doorbellAlert && (
@@ -258,6 +266,22 @@ export default function App() {
           }}
         >
           {talking ? "End" : "Talk"}
+        </button>
+        <button
+          onClick={checkIn}
+          disabled={checkInState !== "idle"}
+          style={{
+            padding: "14px 20px",
+            borderRadius: 999,
+            border: "1px solid #444",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: checkInState === "idle" ? "pointer" : "default",
+            background: "#1a1a1a",
+            color: "#eee",
+          }}
+        >
+          {checkInState === "sent" ? "Waking reception…" : "Check in"}
         </button>
       </div>
     </div>
