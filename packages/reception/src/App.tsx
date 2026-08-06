@@ -3,6 +3,7 @@ import { loadAppConfig, isWithinScheduleWindow, type AppConfig, type ScheduleCon
 import { ReceptionRoom } from "./daily";
 import { keepScreenAwake } from "./wakeLock";
 import { applyScheduleOverride, saveScheduleOverride } from "./scheduleOverride";
+import { Kiosk, loadKioskPreference, saveKioskPreference } from "./kiosk";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
@@ -22,6 +23,7 @@ export default function App() {
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
   const [doorbellState, setDoorbellState] = useState<"idle" | "rung">("idle");
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
+  const [kioskEnabled, setKioskEnabled] = useState(() => loadKioskPreference());
   const tickNowRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -115,6 +117,29 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    // Screen pinning doesn't survive an app restart/reboot on its own --
+    // re-arm it on launch if it was left enabled last time.
+    if (kioskEnabled) {
+      Kiosk.start().catch((err) => console.warn("[kiosk] failed to re-arm on launch:", err));
+    }
+  }, []);
+
+  const toggleKiosk = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        await Kiosk.start();
+      } else {
+        await Kiosk.stop();
+      }
+      setKioskEnabled(enabled);
+      saveKioskPreference(enabled);
+    } catch (err) {
+      console.warn("[kiosk] toggle failed:", err);
+      throw err;
+    }
+  };
+
   const pressDoorbell = () => {
     if (doorbellState !== "idle") return;
     roomRef.current?.ringDoorbell();
@@ -189,7 +214,14 @@ export default function App() {
           zIndex: 10,
         }}
       />
-      {schedule && <ScheduleSettings schedule={schedule} onSave={saveSchedule} />}
+      {schedule && (
+        <ScheduleSettings
+          schedule={schedule}
+          onSave={saveSchedule}
+          kioskEnabled={kioskEnabled}
+          onToggleKiosk={toggleKiosk}
+        />
+      )}
     </div>
   );
 }
@@ -197,15 +229,20 @@ export default function App() {
 function ScheduleSettings({
   schedule,
   onSave,
+  kioskEnabled,
+  onToggleKiosk,
 }: {
   schedule: ScheduleConfig;
   onSave: (start: string, end: string) => void;
+  kioskEnabled: boolean;
+  onToggleKiosk: (enabled: boolean) => Promise<void>;
 }) {
   const [stage, setStage] = useState<"closed" | "pin" | "edit">("closed");
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [start, setStart] = useState(schedule.start);
   const [end, setEnd] = useState(schedule.end);
+  const [kioskError, setKioskError] = useState<string | null>(null);
 
   const openPin = () => {
     setPin("");
@@ -228,6 +265,19 @@ function ScheduleSettings({
     e.preventDefault();
     onSave(start, end);
     setStage("closed");
+  };
+
+  const handleKioskToggle = async () => {
+    setKioskError(null);
+    try {
+      await onToggleKiosk(!kioskEnabled);
+    } catch {
+      setKioskError(
+        kioskEnabled
+          ? "Couldn't release the lock. You can also exit by holding Back and Recent Apps together."
+          : 'Couldn\'t enable screen pinning -- it may be turned off. Open Android security settings, turn on "Screen pinning" (sometimes called "App pinning"), then try again.',
+      );
+    }
   };
 
   if (stage === "closed") {
@@ -331,6 +381,60 @@ function ScheduleSettings({
               style={{ padding: 8, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
             />
           </label>
+
+          <div
+            style={{
+              borderTop: "1px solid #333",
+              paddingTop: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ color: "#eee", fontWeight: 600, fontSize: 14 }}>Kiosk lock</div>
+            <div style={{ color: "#999", fontSize: 12, lineHeight: 1.4 }}>
+              Pins the app to the screen using Android's built-in Screen Pinning, so it
+              can't be minimized, switched away from, or closed by an accidental tap.
+              Android will show a one-time confirmation the first time this is turned on.
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleKioskToggle()}
+              style={{
+                padding: 10,
+                borderRadius: 6,
+                border: "none",
+                cursor: "pointer",
+                background: kioskEnabled ? "#c62828" : "#2e7d32",
+                color: "#fff",
+                fontWeight: 600,
+              }}
+            >
+              {kioskEnabled ? "Disable kiosk lock" : "Enable kiosk lock"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void Kiosk.openSecuritySettings().catch(() => setKioskError("Couldn't open Android settings."))}
+              style={{
+                padding: 8,
+                borderRadius: 6,
+                border: "1px solid #444",
+                background: "transparent",
+                color: "#ccc",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Open Android security settings
+            </button>
+            {kioskError && <div style={{ color: "#f66", fontSize: 12 }}>{kioskError}</div>}
+            {kioskEnabled && (
+              <div style={{ color: "#999", fontSize: 12 }}>
+                To exit without the code: hold Back and Recent Apps together (varies by device).
+              </div>
+            )}
+          </div>
+
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" style={{ flex: 1, padding: 10, borderRadius: 6 }}>
               Save

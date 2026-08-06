@@ -57,7 +57,12 @@ for the shape.
   editing the schedule's start/end times directly on the tablet — stored in
   that device's local storage (`scheduleOverride.ts`), so it survives app
   restarts without needing a rebuild or a hosted config. Keeps the screen
-  awake via `@capacitor-community/keep-awake`.
+  awake via `@capacitor-community/keep-awake`. The same settings panel has a
+  **kiosk lock** toggle that pins the app to the screen via Android's
+  built-in Screen Pinning (a tiny custom Capacitor plugin — `KioskPlugin.java`
+  / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be
+  minimized, switched away from, or closed by an accidental tap. The
+  preference is remembered on-device and re-armed automatically each launch.
 - **Viewer**: fetches the same config, gates access with an email check
   against the allowlist, joins subscribe-only (no local mic/camera sent
   until Talk is pressed), renders the reception feed, has a tap-to-toggle
@@ -194,12 +199,30 @@ commit real secrets) and wire `call.join({ url, token })` in
 
 ## Still open / not yet built
 
-- **Selectable operating mode** (constant / motion-wake / doorbell-only):
-  needs design decisions first — wake-hold duration, motion sensitivity,
-  whether motion detection runs locally before ever joining Daily (to avoid
-  burning room-minutes while idle).
-- **Remote camera-switch control** on the viewer (flip the tablet's
-  front/back camera remotely).
-- **Kiosk-lock** so the reception app can't be minimized without a PIN —
-  needs the app set as Android Device Owner (one-time ADB provisioning,
-  ideally on a freshly factory-reset tablet).
+- **Doorbell button redesign**: large circular tap target across the top
+  third of the tablet screen, plus a general background/layout pass —
+  deliberately deferred until everything else is finalized.
+
+## Kiosk lock: what it does and doesn't protect against
+
+The kiosk toggle uses Android's built-in **Screen Pinning**
+(`Activity.startLockTask()`), not full Device Owner mode. That's a
+deliberate trade-off:
+
+- **No ADB or factory reset needed** — it's just an in-app toggle, backed by
+  a small custom Capacitor plugin (`android/app/src/main/java/au/com/set/reception/KioskPlugin.java`).
+  Android shows its own one-time confirmation dialog the first time it's
+  enabled.
+- **It can still be exited** without the app's PIN, via Android's own
+  hold-Back-and-Recent-Apps gesture (exact combo varies by Android
+  version/OEM) — that's how screen pinning is designed to work everywhere,
+  and isn't something an app can override. This is enough to stop an
+  accidental tap or a curious kid poking at the screen, but isn't real
+  security against someone who knows that gesture.
+- If a device policy has screen pinning turned off, `Kiosk.start()` will
+  fail — the settings panel's "Open Android security settings" button jumps
+  straight to the screen where it's re-enabled.
+- Full Device Owner provisioning (`adb shell dpm set-device-owner`, on a
+  freshly factory-reset tablet, from a PC) would close that gesture-based
+  exit entirely, at the cost of a one-time manual ADB step. Worth revisiting
+  if the gesture-based exit turns out to matter in practice.
