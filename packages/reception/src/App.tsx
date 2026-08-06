@@ -27,8 +27,6 @@ export default function App() {
     let scheduleTimer: ReturnType<typeof setInterval>;
     let configTimer: ReturnType<typeof setInterval>;
     let clockTimer: ReturnType<typeof setInterval>;
-    let publishing = false;
-    let wakeUntil: number | null = null;
 
     async function refreshConfig() {
       const config = await loadAppConfig(CONFIG_URL);
@@ -39,21 +37,22 @@ export default function App() {
 
     async function tick() {
       const config = configRef.current;
+      if (!config) return;
+
+      const shouldBeLive = isWithinScheduleWindow(config.schedule);
       const room = roomRef.current;
-      if (!config || !room) return;
-
-      const scheduledLive = isWithinScheduleWindow(config.schedule);
-      const wakeActive = wakeUntil !== null && Date.now() < wakeUntil;
-      const shouldPublish = scheduledLive || wakeActive;
-
-      if (shouldPublish === publishing) return;
+      if (!room) return;
 
       try {
-        await room.setVideoPublishing(shouldPublish);
-        publishing = shouldPublish;
-        setStatus(shouldPublish ? "live" : "waiting");
+        if (shouldBeLive && !room.isJoined) {
+          await room.joinAmbient();
+          setStatus("live");
+        } else if (!shouldBeLive && room.isJoined) {
+          await room.leave();
+          setStatus("waiting");
+        }
       } catch (err) {
-        console.error("[schedule] failed to update video publishing:", err);
+        console.error("[schedule] join/leave failed:", err);
         setStatus("error");
       }
     }
@@ -61,7 +60,6 @@ export default function App() {
     (async () => {
       await refreshConfig();
       if (cancelled || !configRef.current) return;
-
       roomRef.current = new ReceptionRoom(
         configRef.current,
         (err) => {
@@ -92,24 +90,8 @@ export default function App() {
             if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
           }
         },
-        () => {
-          // Out-of-hours "Check in" from the viewer. Extends (or starts) the
-          // wake window and re-evaluates immediately rather than waiting up
-          // to SCHEDULE_CHECK_INTERVAL_MS for the next tick.
-          const minutes = configRef.current?.checkInDurationMinutes ?? 10;
-          wakeUntil = Date.now() + minutes * 60_000;
-          void tick();
-        },
       );
-
-      try {
-        await roomRef.current.connect();
-      } catch (err) {
-        console.error("[reception] failed to connect:", err);
-        setStatus("error");
-        return;
-      }
-
+      setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
 
       scheduleTimer = setInterval(() => void tick(), SCHEDULE_CHECK_INTERVAL_MS);
@@ -122,7 +104,7 @@ export default function App() {
       clearInterval(scheduleTimer);
       clearInterval(configTimer);
       clearInterval(clockTimer);
-      void roomRef.current?.disconnect();
+      void roomRef.current?.leave();
     };
   }, []);
 

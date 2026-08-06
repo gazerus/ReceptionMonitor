@@ -47,10 +47,4 @@ export interface AppConfig {
    * within this many seconds, the reception app drops back to ambient mode.
    */
   talkSessionTimeoutSeconds: number;
-  /**
-   * How long the reception tablet keeps video on after a viewer's
-   * out-of-hours "Check in" request, before dropping back to idle (video
-   * off) if the real schedule window still hasn't started.
-   */
-  checkInDurationMinutes: number;
 }

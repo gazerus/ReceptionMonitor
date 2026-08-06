@@ -15,6 +15,5 @@
     "ambient": { "width": 320, "height": 240, "frameRate": 3 },
     "talk": { "width": 640, "height": 480, "frameRate": 15 }
   },
-  "talkSessionTimeoutSeconds": 300,
-  "checkInDurationMinutes": 10
+  "talkSessionTimeoutSeconds": 300
 }

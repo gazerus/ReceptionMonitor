@@ -7,8 +7,7 @@ import type { AppConfig } from "@reception/shared";
 
 export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
-export type WakeRequestMessage = { type: "wake-request" };
-type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeRequestMessage;
+type SignalMessage = TalkRequestMessage | TalkEndMessage;
 
 function isSignalMessage(data: unknown): data is SignalMessage {
   return (
@@ -16,8 +15,7 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     data !== null &&
     "type" in data &&
     ((data as { type: unknown }).type === "talk-request" ||
-      (data as { type: unknown }).type === "talk-end" ||
-      (data as { type: unknown }).type === "wake-request")
+      (data as { type: unknown }).type === "talk-end")
   );
 }
 
@@ -31,31 +29,25 @@ export class ReceptionRoom {
     private onLocalVideoTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteAudioTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteVideoTrack?: (track: MediaStreamTrack | null) => void,
-    private onWakeRequested?: () => void,
   ) {}
 
   updateConfig(config: AppConfig) {
     this.config = config;
   }
 
-  get isConnected(): boolean {
+  get isJoined(): boolean {
     return this.call !== null;
   }
 
-  /**
-   * Joins the fixed room once and stays joined indefinitely, video and mic
-   * both off to start. Video/mic are toggled separately via
-   * setVideoPublishing()/startTalkSession() -- staying connected 24/7 (not
-   * just during scheduled hours) is what lets an out-of-hours "Check in"
-   * request from the viewer reach the tablet instantly over the same Daily
-   * connection, with no polling or server component needed.
-   */
-  async connect(): Promise<void> {
+  /** Joins the fixed room and publishes a video-only, low-res ambient track. No mic. */
+  async joinAmbient(): Promise<void> {
     if (this.call) return;
 
     const call = Daily.createCallObject({
+      // The mic device is acquired but kept muted so a talk request can
+      // unmute instantly with no renegotiation delay.
       startAudioOff: true,
-      startVideoOff: true,
+      startVideoOff: false,
     });
     call.on("app-message", this.handleAppMessage);
     call.on("camera-error", this.handleCameraError);
@@ -65,12 +57,20 @@ export class ReceptionRoom {
     call.on("track-stopped", this.handleRemoteTrackStopped);
 
     try {
+      // startAudioOff/startVideoOff are accepted independently by both
+      // createCallObject() and join() -- setting them only at creation
+      // left the local video track sitting at state "off" after join()
+      // (confirmed via the post-join track-state log below), so set them
+      // at both call sites.
       await call.join({
         url: this.config.room.roomUrl,
         startAudioOff: true,
-        startVideoOff: true,
+        startVideoOff: false,
       });
     } catch (err) {
+      // Don't leave `this.call` pointing at a call object that never
+      // actually joined — that would make isJoined true and stop the
+      // schedule loop from ever retrying.
       call.off("app-message", this.handleAppMessage);
       call.off("camera-error", this.handleCameraError);
       call.off("track-started", this.handleLocalTrackStarted);
@@ -82,10 +82,23 @@ export class ReceptionRoom {
     }
 
     this.call = call;
+    await this.applyAmbientQuality();
+
+    // Belt-and-suspenders: force video on explicitly in case join()'s
+    // startVideoOff isn't enough on its own either.
+    call.setLocalVideo(true);
+
+    const localVideo = call.participants().local?.tracks?.video;
+    console.log(
+      "[reception] post-join local video track state:",
+      localVideo?.state,
+      "off reason:",
+      (localVideo as { off?: { reason?: string } } | undefined)?.off?.reason,
+    );
   }
 
-  /** Fully disconnects -- only meant for app teardown, not the schedule loop. */
-  async disconnect(): Promise<void> {
+  /** Leaves the room and fully releases the camera/mic. */
+  async leave(): Promise<void> {
     if (!this.call) return;
     this.clearTalkTimeout();
     this.call.off("app-message", this.handleAppMessage);
@@ -99,33 +112,12 @@ export class ReceptionRoom {
     this.call = null;
   }
 
-  /** Turns the ambient video feed on or off without touching the room connection itself. */
-  async setVideoPublishing(enabled: boolean): Promise<void> {
-    if (!this.call) return;
-    if (enabled) {
-      await this.applyAmbientQuality();
-      this.call.setLocalVideo(true);
-
-      const localVideo = this.call.participants().local?.tracks?.video;
-      console.log(
-        "[reception] local video track state after enabling:",
-        localVideo?.state,
-        "off reason:",
-        (localVideo as { off?: { reason?: string } } | undefined)?.off?.reason,
-      );
-    } else {
-      this.call.setLocalVideo(false);
-    }
-  }
-
   private handleAppMessage = (event?: DailyEventObjectAppMessage) => {
     if (!event || !isSignalMessage(event.data)) return;
     if (event.data.type === "talk-request") {
       void this.startTalkSession();
     } else if (event.data.type === "talk-end") {
       void this.endTalkSession();
-    } else if (event.data.type === "wake-request") {
-      this.onWakeRequested?.();
     }
   };
 
@@ -202,16 +194,10 @@ export class ReceptionRoom {
     });
   }
 
-  /**
-   * Un-mutes the mic and bumps video quality for the duration of the
-   * exchange. Also forces video on regardless of current publishing state,
-   * in case a talk request arrives while the tablet is idle outside
-   * scheduled hours without a prior Check in.
-   */
+  /** Un-mutes the mic and bumps video quality for the duration of the exchange. */
   async startTalkSession(): Promise<void> {
     if (!this.call) return;
     await this.applyTalkQuality();
-    this.call.setLocalVideo(true);
     this.call.setLocalAudio(true);
 
     this.clearTalkTimeout();

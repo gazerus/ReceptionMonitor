@@ -38,33 +38,26 @@ for the shape.
 
 ## What's implemented
 
-- **Reception app**: connects to the Daily room once and **stays connected
-  24/7** (mic and video both off to start) rather than joining/leaving on
-  schedule — this is what lets an out-of-hours "Check in" reach it
-  instantly (see below) with no polling or server component. A 30s tick
-  turns ambient video (front/selfie camera, no mic) on during the scheduled
-  window and off outside it. Listens for `talk-request`/`talk-end` app
-  messages, upgrading video via `updateInputSettings` and toggling the mic
-  (and forcing video on regardless of current state, in case a talk
-  request arrives without a prior check-in). Plays the viewer's incoming
+- **Reception app**: polls the schedule every 30s; joins the Daily room and
+  publishes ambient-quality video (front/selfie camera, no mic) when inside
+  the window, leaves when outside it. Mic is acquired-but-muted at join so a
+  talk request can unmute instantly with no renegotiation delay. Listens for
+  `talk-request`/`talk-end` app messages, upgrading video via
+  `updateInputSettings` and toggling the mic. Plays the viewer's incoming
   audio out loud, and shows the viewer's video full-screen during a talk
-  session, dropping straight back to ambient the moment it ends (no frozen
-  last-frame hold) with a small self-preview thumbnail always visible. Has
-  an on-screen doorbell button ("Press for assistance") for when nobody's
-  watching the viewer — signals any connected viewer via the same Daily
-  message channel used for talk requests; deliberately no server-side push
-  infrastructure behind it, so it only reaches you if the viewer page
-  happens to be open (see "Explicitly out of scope" below — a conscious
-  trade-off to keep the app self-contained). Keeps the screen awake via
-  `@capacitor-community/keep-awake`.
+  session (holding 30s after it ends) with a small self-preview thumbnail
+  always visible. Has an on-screen doorbell button ("Press for assistance")
+  for when nobody's watching the viewer — signals any connected viewer via
+  the same Daily message channel used for talk requests; deliberately no
+  server-side push infrastructure behind it, so it only reaches you if the
+  viewer page happens to be open (see "Explicitly out of scope" below —
+  this was a conscious trade-off to keep the app self-contained). Keeps the
+  screen awake via `@capacitor-community/keep-awake`.
 - **Viewer**: fetches the same config, gates access with an email check
   against the allowlist, joins subscribe-only (no local mic/camera sent
-  until Talk is pressed), renders the reception feed, has a tap-to-toggle
-  Talk button that publishes mic + front camera and signals the tablet
-  (with its own self-preview while active), a "Check in" button that asks
-  the tablet to turn its video on outside scheduled hours, and shows a
-  banner + beep + screen flash when the doorbell is pressed while
-  connected.
+  until Talk is pressed), renders the reception feed, has a hold-to-talk
+  button that publishes mic + front camera and signals the tablet, and
+  shows a banner when the doorbell is pressed while connected.
 - **Access control**: allowlist is a plain array of emails in the shared
   config — starts with just Garry, and adding Sonja/Richie/Shane later is a
   one-line JSON edit, no code change.
@@ -99,12 +92,6 @@ to the hosted config JSON, not rebuilds:
 4. **Resolution/framerate**: defaulted to ambient **320×240 @ 3fps**, talk
    **640×480 @ 15fps**, per the spec's starting numbers. Tune after testing
    on actual office WiFi.
-5. **Daily.co usage**: the reception app now stays connected to the room
-   24/7 (video off outside scheduled hours) rather than only ~8hrs/day, a
-   deliberate choice to support instant out-of-hours "Check in" with no
-   server component. This means more Daily participant-minutes billed than
-   a schedule-gated connection would use — confirm this stays comfortably
-   within your plan's limits once real usage patterns are known.
 
 ## Status
 
