@@ -41,6 +41,7 @@ export default function App() {
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
   const streamRef = useRef<MediaStream>(new MediaStream());
 
@@ -72,7 +73,16 @@ export default function App() {
     const stream = streamRef.current;
 
     const handleTrackStarted = (event?: DailyEventObjectTrack) => {
-      if (!event || event.participant?.local) return;
+      if (!event) return;
+      // Self-preview of Garry's own outgoing video, shown only while
+      // talking -- standard video-call convention, doesn't touch the
+      // reception tablet's feed at all.
+      if (event.participant?.local) {
+        if (event.track.kind === "video" && localVideoRef.current) {
+          localVideoRef.current.srcObject = new MediaStream([event.track]);
+        }
+        return;
+      }
       stream.addTrack(event.track);
       if (event.track.kind === "audio") setRemoteAudioActive(true);
       if (videoRef.current && videoRef.current.srcObject !== stream) {
@@ -87,7 +97,13 @@ export default function App() {
     };
 
     const handleTrackStopped = (event?: DailyEventObjectTrack) => {
-      if (!event || event.participant?.local) return;
+      if (!event) return;
+      if (event.participant?.local) {
+        if (event.track.kind === "video" && localVideoRef.current) {
+          localVideoRef.current.srcObject = null;
+        }
+        return;
+      }
       stream.removeTrack(event.track);
       if (event.track.kind === "audio") setRemoteAudioActive(false);
     };
@@ -178,7 +194,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#111" }}>
+    <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", background: "#111" }}>
       {doorbellAlert && (
         <div
           style={{
@@ -204,6 +220,24 @@ export default function App() {
         // isn't subject to the same restriction as starting unmuted.
         muted={!remoteAudioActive}
         style={{ flex: 1, objectFit: "contain", background: "#000" }}
+      />
+      <video
+        ref={localVideoRef}
+        autoPlay
+        muted
+        playsInline
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          width: 90,
+          height: 120,
+          objectFit: "cover",
+          borderRadius: 8,
+          border: "1px solid #333",
+          background: "#000",
+          display: talking ? "block" : "none",
+        }}
       />
       <div style={{ padding: 16, display: "flex", justifyContent: "center", gap: 12 }}>
         <span style={{ color: connected ? "#2e7d32" : "#888", alignSelf: "center", fontSize: 13 }}>
