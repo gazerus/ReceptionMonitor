@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { loadAppConfig, isWithinScheduleWindow, type AppConfig } from "@reception/shared";
+import { loadAppConfig, isWithinScheduleWindow, type AppConfig, type ScheduleConfig } from "@reception/shared";
 import { ReceptionRoom } from "./daily";
 import { keepScreenAwake } from "./wakeLock";
+import { applyScheduleOverride, saveScheduleOverride } from "./scheduleOverride";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
+const SETTINGS_PIN = "45656";
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
@@ -19,6 +21,8 @@ export default function App() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
   const [doorbellState, setDoorbellState] = useState<"idle" | "rung">("idle");
+  const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
+  const tickNowRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     void keepScreenAwake();
@@ -31,7 +35,9 @@ export default function App() {
     async function refreshConfig() {
       const config = await loadAppConfig(CONFIG_URL);
       if (cancelled) return;
+      config.schedule = applyScheduleOverride(config.schedule);
       configRef.current = config;
+      setSchedule(config.schedule);
       roomRef.current?.updateConfig(config);
     }
 
@@ -56,6 +62,7 @@ export default function App() {
         setStatus("error");
       }
     }
+    tickNowRef.current = () => void tick();
 
     (async () => {
       await refreshConfig();
@@ -115,6 +122,18 @@ export default function App() {
     setTimeout(() => setDoorbellState("idle"), 4000);
   };
 
+  const saveSchedule = (start: string, end: string) => {
+    saveScheduleOverride({ start, end });
+    setSchedule((prev) => (prev ? { ...prev, start, end } : prev));
+    if (configRef.current) {
+      configRef.current = { ...configRef.current, schedule: { ...configRef.current.schedule, start, end } };
+      roomRef.current?.updateConfig(configRef.current);
+    }
+    // Re-evaluate immediately rather than waiting up to
+    // SCHEDULE_CHECK_INTERVAL_MS for the new hours to take effect.
+    tickNowRef.current();
+  };
+
   return (
     <div
       style={{
@@ -170,6 +189,162 @@ export default function App() {
           zIndex: 10,
         }}
       />
+      {schedule && <ScheduleSettings schedule={schedule} onSave={saveSchedule} />}
+    </div>
+  );
+}
+
+function ScheduleSettings({
+  schedule,
+  onSave,
+}: {
+  schedule: ScheduleConfig;
+  onSave: (start: string, end: string) => void;
+}) {
+  const [stage, setStage] = useState<"closed" | "pin" | "edit">("closed");
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const [start, setStart] = useState(schedule.start);
+  const [end, setEnd] = useState(schedule.end);
+
+  const openPin = () => {
+    setPin("");
+    setPinError(false);
+    setStage("pin");
+  };
+
+  const submitPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === SETTINGS_PIN) {
+      setStart(schedule.start);
+      setEnd(schedule.end);
+      setStage("edit");
+    } else {
+      setPinError(true);
+    }
+  };
+
+  const submitSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(start, end);
+    setStage("closed");
+  };
+
+  if (stage === "closed") {
+    return (
+      <button
+        onClick={openPin}
+        aria-label="Settings"
+        style={{
+          position: "absolute",
+          bottom: 16,
+          left: 16,
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          border: "1px solid #333",
+          background: "rgba(255,255,255,0.06)",
+          color: "#888",
+          fontSize: 16,
+          zIndex: 10,
+        }}
+      >
+        ⚙
+      </button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "rgba(0,0,0,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 20,
+      }}
+    >
+      {stage === "pin" ? (
+        <form
+          onSubmit={submitPin}
+          style={{ display: "flex", flexDirection: "column", gap: 12, width: 220 }}
+        >
+          <div style={{ color: "#eee", textAlign: "center" }}>Enter code</div>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            style={{
+              padding: 10,
+              borderRadius: 6,
+              border: "1px solid #444",
+              background: "#1a1a1a",
+              color: "#eee",
+              textAlign: "center",
+              fontSize: 20,
+              letterSpacing: 4,
+            }}
+          />
+          {pinError && (
+            <div style={{ color: "#f66", fontSize: 13, textAlign: "center" }}>Incorrect code</div>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" style={{ flex: 1, padding: 10, borderRadius: 6 }}>
+              OK
+            </button>
+            <button
+              type="button"
+              onClick={() => setStage("closed")}
+              style={{ flex: 1, padding: 10, borderRadius: 6 }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form
+          onSubmit={submitSchedule}
+          style={{ display: "flex", flexDirection: "column", gap: 12, width: 260 }}
+        >
+          <div style={{ color: "#eee", textAlign: "center", fontWeight: 600 }}>
+            Monitoring hours
+          </div>
+          <label style={{ color: "#ccc", fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+            Start
+            <input
+              type="time"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              style={{ padding: 8, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
+            />
+          </label>
+          <label style={{ color: "#ccc", fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+            End
+            <input
+              type="time"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              style={{ padding: 8, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
+            />
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" style={{ flex: 1, padding: 10, borderRadius: 6 }}>
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setStage("closed")}
+              style={{ flex: 1, padding: 10, borderRadius: 6 }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

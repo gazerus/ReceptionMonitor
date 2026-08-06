@@ -45,19 +45,25 @@ for the shape.
   `talk-request`/`talk-end` app messages, upgrading video via
   `updateInputSettings` and toggling the mic. Plays the viewer's incoming
   audio out loud, and shows the viewer's video full-screen during a talk
-  session (holding 30s after it ends) with a small self-preview thumbnail
-  always visible. Has an on-screen doorbell button ("Press for assistance")
-  for when nobody's watching the viewer — signals any connected viewer via
-  the same Daily message channel used for talk requests; deliberately no
+  session, dropping straight back to the ambient view the moment it ends
+  (no frozen last-frame hold) with a small self-preview thumbnail always
+  visible. Has an on-screen doorbell button ("Press for assistance") for
+  when nobody's watching the viewer — signals any connected viewer via the
+  same Daily message channel used for talk requests; deliberately no
   server-side push infrastructure behind it, so it only reaches you if the
   viewer page happens to be open (see "Explicitly out of scope" below —
-  this was a conscious trade-off to keep the app self-contained). Keeps the
-  screen awake via `@capacitor-community/keep-awake`.
+  this was a conscious trade-off to keep the app self-contained). Also has
+  a small PIN-protected settings button (bottom-left, code `45656`) for
+  editing the schedule's start/end times directly on the tablet — stored in
+  that device's local storage (`scheduleOverride.ts`), so it survives app
+  restarts without needing a rebuild or a hosted config. Keeps the screen
+  awake via `@capacitor-community/keep-awake`.
 - **Viewer**: fetches the same config, gates access with an email check
   against the allowlist, joins subscribe-only (no local mic/camera sent
-  until Talk is pressed), renders the reception feed, has a hold-to-talk
-  button that publishes mic + front camera and signals the tablet, and
-  shows a banner when the doorbell is pressed while connected.
+  until Talk is pressed), renders the reception feed, has a tap-to-toggle
+  Talk button that publishes mic + front camera and signals the tablet
+  (with its own self-preview while active), and shows a banner + beep +
+  screen flash when the doorbell is pressed while connected.
 - **Access control**: allowlist is a plain array of emails in the shared
   config — starts with just Garry, and adding Sonja/Richie/Shane later is a
   one-line JSON edit, no code change.
