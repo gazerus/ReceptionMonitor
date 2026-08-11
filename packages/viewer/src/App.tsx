@@ -44,6 +44,16 @@ export default function App() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
   const streamRef = useRef<MediaStream>(new MediaStream());
+  const doorbellTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const doorbellIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopDoorbellAlert = () => {
+    if (doorbellTimeoutRef.current) clearTimeout(doorbellTimeoutRef.current);
+    if (doorbellIntervalRef.current) clearInterval(doorbellIntervalRef.current);
+    doorbellTimeoutRef.current = null;
+    doorbellIntervalRef.current = null;
+    setDoorbellAlert(false);
+  };
 
   useEffect(() => {
     void loadAppConfig(CONFIG_URL).then(setConfig);
@@ -122,7 +132,15 @@ export default function App() {
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("SET Reception", { body: "Someone is at reception." });
         }
-        setTimeout(() => setDoorbellAlert(false), 10_000);
+
+        // Keep beeping while the page is open and the alert is showing --
+        // a single beep is easy to miss if nobody's looking right at the
+        // phone at that exact moment. Stops early if Talk is pressed, or
+        // after the window elapses.
+        if (doorbellTimeoutRef.current) clearTimeout(doorbellTimeoutRef.current);
+        if (doorbellIntervalRef.current) clearInterval(doorbellIntervalRef.current);
+        doorbellIntervalRef.current = setInterval(playDoorbellBeep, 2500);
+        doorbellTimeoutRef.current = setTimeout(stopDoorbellAlert, 10_000);
       }
     };
 
@@ -142,6 +160,7 @@ export default function App() {
       stream.getTracks().forEach((t) => stream.removeTrack(t));
       void room.leave();
       setConnected(false);
+      stopDoorbellAlert();
     };
   }, [authorized, config]);
 
@@ -190,6 +209,7 @@ export default function App() {
     } else {
       void roomRef.current?.startTalk(true);
       setTalking(true);
+      stopDoorbellAlert();
     }
   };
 
