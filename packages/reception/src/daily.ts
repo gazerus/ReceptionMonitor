@@ -10,6 +10,22 @@ export type TalkEndMessage = { type: "talk-end" };
 export type SwitchCameraMessage = { type: "switch-camera" };
 type SignalMessage = TalkRequestMessage | TalkEndMessage | SwitchCameraMessage;
 
+/**
+ * Deterministic default ntfy.sh topic derived from the room URL, so any
+ * deployment gets a working, collision-resistant doorbell-push topic for
+ * free just by having its own unique Daily room (which it already needs) --
+ * no separate "remember to generate a random topic" step for whoever else
+ * ends up deploying a copy of this app.
+ */
+async function deriveNtfyTopic(roomUrl: string): Promise<string> {
+  const bytes = new TextEncoder().encode(roomUrl);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `reception-monitor-${hex.slice(0, 16)}`;
+}
+
 function isSignalMessage(data: unknown): data is SignalMessage {
   return (
     typeof data === "object" &&
@@ -250,10 +266,11 @@ export class ReceptionRoom {
 
   private async sendNtfyPush(): Promise<void> {
     const push = this.config.doorbellPush;
-    if (!push?.ntfyTopic) return;
+    if (!push) return;
+    const topic = push.ntfyTopic ?? (await deriveNtfyTopic(this.config.room.roomUrl));
     const baseUrl = push.ntfyBaseUrl ?? "https://ntfy.sh";
     try {
-      await fetch(`${baseUrl}/${push.ntfyTopic}`, {
+      await fetch(`${baseUrl}/${topic}`, {
         method: "POST",
         body: "Someone is at reception.",
         headers: {

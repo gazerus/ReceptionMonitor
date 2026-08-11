@@ -39,11 +39,14 @@ export interface VideoQualityConfig {
 
 export interface DoorbellPushConfig {
   /**
-   * ntfy.sh topic the tablet posts to on doorbell press -- treat this like a
-   * shared secret slug (anyone who knows it can publish or subscribe), not
-   * a public identifier.
+   * ntfy.sh topic the tablet posts to on doorbell press. Optional -- if
+   * omitted, it's derived automatically from `room.roomUrl`, so a fresh
+   * deployment gets a working, collision-resistant topic for free just by
+   * having its own unique room URL (which it already needs). Set this
+   * explicitly to pick a memorable name instead, or to rotate it
+   * independently of the room URL.
    */
-  ntfyTopic: string;
+  ntfyTopic?: string;
   /** Defaults to https://ntfy.sh; override only if self-hosting ntfy. */
   ntfyBaseUrl?: string;
   /** Opened when the push notification itself is tapped -- typically the viewer page. */

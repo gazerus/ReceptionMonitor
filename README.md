@@ -196,16 +196,41 @@ it as a real Android push notification, which survives the viewer page
 being closed, the phone being locked, or the browser being backgrounded —
 things a webpage's own JS can't reliably do on its own.
 
-**One-time setup on your phone:**
+**Opt-in per deployment**: this only activates if `doorbellPush` is present
+in the config JSON at all — omit it entirely and no ntfy traffic happens,
+ever. It's present (as an empty `{ "clickUrl": ... }`) in
+`config.default.json` here, but stays fully inert until someone actually
+subscribes on a phone (see below) — adding the config doesn't send anything
+on its own.
+
+**The topic is derived automatically, not hand-picked.** If
+`doorbellPush.ntfyTopic` isn't set explicitly, it's computed as
+`reception-monitor-<first 16 hex chars of SHA-256(room.roomUrl)>`
+(`deriveNtfyTopic()` in `daily.ts`). That means **anyone deploying their own
+copy of this project gets a working, collision-resistant topic for free**,
+just by virtue of already needing their own unique Daily room URL — no
+separate "remember to generate a random topic and keep it in sync between
+the tablet config and your phone" step, and no risk of two independent
+deployments accidentally colliding on the same topic. Set `ntfyTopic`
+explicitly only if you want a memorable name or want to rotate it
+independently of the room URL.
+
+**One-time setup on your phone**, once `doorbellPush` is in your config:
 
 1. Install the free **ntfy** app from the Play Store (publisher: ntfy.sh /
    Philipp Heckel). No account or sign-up needed.
-2. Open it, tap **+** (subscribe to topic), and enter exactly:
-   `set-reception-7d81642e1f6e`
-   (this is the topic configured in `config.default.json` —
-   `doorbellPush.ntfyTopic`; change it there and rebuild if you ever want a
-   different one).
-3. Leave notifications enabled for the app (Android will likely ask on
+2. Work out your derived topic: it's
+   `reception-monitor-` + the first 16 hex characters of the SHA-256 hash of
+   your `room.roomUrl` string. For this deployment's current room
+   (`https://kwikvid.daily.co/ManningSt`), that's:
+   `reception-monitor-e3a41fa788f503d7`
+   (Recompute this yourself if the room URL ever changes — e.g.
+   `printf '%s' "<roomUrl>" | sha256sum` and take the first 16 characters —
+   or just set an explicit `ntfyTopic` in the config instead of relying on
+   the derived one.)
+3. Open the ntfy app, tap **+** (subscribe to topic), and enter that topic
+   exactly.
+4. Leave notifications enabled for the app (Android will likely ask on
    first subscribe — allow it).
 
 That's it — pressing the doorbell now reaches you either way, in-page if
@@ -213,15 +238,22 @@ the viewer's open, as a push notification if it isn't. Tapping the push
 notification opens the viewer page directly (`doorbellPush.clickUrl`).
 
 **Worth knowing:**
-- The topic name is effectively a shared secret, not a public identifier —
-  anyone who learns it could publish fake doorbell pushes to it or
-  subscribe to snoop on real ones. It's not tied to any account or personal
-  data, so the exposure is low, but don't post it anywhere public.
+- The topic (derived or explicit) is effectively a shared secret, not a
+  public identifier — anyone who learns it could publish fake doorbell
+  pushes to it or subscribe to snoop on real ones. Since the derived topic
+  is just a hash of the (already-public, in this repo) room URL, it's no
+  more or less exposed than the repo itself already is — consistent with
+  this project's existing "good enough for an internal tool" security
+  posture elsewhere (PIN `45656`, client-side allowlist).
 - This depends on ntfy.sh's free public service staying up — reasonable for
   an internal tool like this, but not a guaranteed-delivery SLA. If that
   ever matters, ntfy is open-source and self-hostable, or `doorbellPush`
   could point `ntfyBaseUrl` at a self-hosted instance without any app code
   changes.
+- **Multiple people can subscribe to the same topic** — ntfy is
+  publish/subscribe, not point-to-point, so Sonja/Richie/Shane (or anyone
+  else who should hear the doorbell) can each install the app and subscribe
+  to the same topic independently; no extra config needed per person.
 
 ## Explicitly out of scope (per original spec — some since revisited)
 
