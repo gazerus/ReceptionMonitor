@@ -15,5 +15,9 @@
     "ambient": { "width": 320, "height": 240, "frameRate": 3 },
     "talk": { "width": 640, "height": 480, "frameRate": 15 }
   },
-  "talkSessionTimeoutSeconds": 300
+  "talkSessionTimeoutSeconds": 300,
+  "doorbellPush": {
+    "ntfyTopic": "set-reception-7d81642e1f6e",
+    "clickUrl": "https://gazerus.github.io/ReceptionMonitor/"
+  }
 }

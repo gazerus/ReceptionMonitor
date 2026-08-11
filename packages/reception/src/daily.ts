@@ -238,11 +238,34 @@ export class ReceptionRoom {
 
   /**
    * Called when a visitor presses the on-screen doorbell button. Signals
-   * any viewer currently connected to the room -- only reaches Garry if the
-   * viewer page happens to be open, by design: no server-side push
-   * infrastructure to stand up or maintain for this.
+   * any viewer currently connected to the room (in-page beep/flash, only
+   * reaches an already-open viewer), and separately fires a real OS push
+   * via ntfy.sh so it still reaches Garry's phone if the viewer page is
+   * closed or minimized -- no server of our own involved either way.
    */
   ringDoorbell(): void {
     this.call?.sendAppMessage({ type: "doorbell" }, "*");
+    void this.sendNtfyPush();
+  }
+
+  private async sendNtfyPush(): Promise<void> {
+    const push = this.config.doorbellPush;
+    if (!push?.ntfyTopic) return;
+    const baseUrl = push.ntfyBaseUrl ?? "https://ntfy.sh";
+    try {
+      await fetch(`${baseUrl}/${push.ntfyTopic}`, {
+        method: "POST",
+        body: "Someone is at reception.",
+        headers: {
+          Title: "SET Reception",
+          Priority: "urgent",
+          Tags: "bellhop_bell",
+          ...(push.clickUrl ? { Click: push.clickUrl } : {}),
+        },
+      });
+    } catch (err) {
+      // Best-effort -- a failed push shouldn't block the in-room signal above.
+      console.warn("[reception] ntfy push failed:", err);
+    }
   }
 }

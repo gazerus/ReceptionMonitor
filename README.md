@@ -49,10 +49,12 @@ for the shape.
   (no frozen last-frame hold) with a small self-preview thumbnail always
   visible. Has an on-screen doorbell button ("Press for assistance") for
   when nobody's watching the viewer — signals any connected viewer via the
-  same Daily message channel used for talk requests; deliberately no
-  server-side push infrastructure behind it, so it only reaches you if the
-  viewer page happens to be open (see "Explicitly out of scope" below —
-  this was a conscious trade-off to keep the app self-contained). Also has
+  same Daily message channel used for talk requests (in-page beep/flash,
+  only reaches an already-open viewer), **and** separately fires a real
+  Android push notification via [ntfy.sh](https://ntfy.sh) so it still
+  reaches your phone if the viewer page is closed or minimized — see
+  "Doorbell push notifications" below for setup. No server of our own
+  either way; ntfy.sh is a free hosted relay. Also has
   a small PIN-protected settings button (bottom-left, code `45656`) for
   editing the schedule's start/end times directly on the tablet — stored in
   that device's local storage (`scheduleOverride.ts`), so it survives app
@@ -182,16 +184,54 @@ viewer app yet — copy `server/secrets.example.php` to `secrets.php` (never
 commit real secrets) and wire `call.join({ url, token })` in
 `packages/viewer/src/daily.ts` once you want it.
 
+## Doorbell push notifications (works with the viewer closed/minimized)
+
+On top of the in-page beep/flash (which only fires if the viewer page is
+already open), pressing the tablet's doorbell button also POSTs directly to
+[ntfy.sh](https://ntfy.sh) — a free, open-source push relay. No account, no
+API key, no server of ours: the tablet just does a plain `fetch()` to
+`https://ntfy.sh/<topic>` (see `ReceptionRoom.sendNtfyPush()` in
+`packages/reception/src/daily.ts`), and ntfy's own infrastructure delivers
+it as a real Android push notification, which survives the viewer page
+being closed, the phone being locked, or the browser being backgrounded —
+things a webpage's own JS can't reliably do on its own.
+
+**One-time setup on your phone:**
+
+1. Install the free **ntfy** app from the Play Store (publisher: ntfy.sh /
+   Philipp Heckel). No account or sign-up needed.
+2. Open it, tap **+** (subscribe to topic), and enter exactly:
+   `set-reception-7d81642e1f6e`
+   (this is the topic configured in `config.default.json` —
+   `doorbellPush.ntfyTopic`; change it there and rebuild if you ever want a
+   different one).
+3. Leave notifications enabled for the app (Android will likely ask on
+   first subscribe — allow it).
+
+That's it — pressing the doorbell now reaches you either way, in-page if
+the viewer's open, as a push notification if it isn't. Tapping the push
+notification opens the viewer page directly (`doorbellPush.clickUrl`).
+
+**Worth knowing:**
+- The topic name is effectively a shared secret, not a public identifier —
+  anyone who learns it could publish fake doorbell pushes to it or
+  subscribe to snoop on real ones. It's not tied to any account or personal
+  data, so the exposure is low, but don't post it anywhere public.
+- This depends on ntfy.sh's free public service staying up — reasonable for
+  an internal tool like this, but not a guaranteed-delivery SLA. If that
+  ever matters, ntfy is open-source and self-hostable, or `doorbellPush`
+  could point `ntfyBaseUrl` at a self-hosted instance without any app code
+  changes.
+
 ## Explicitly out of scope (per original spec — some since revisited)
 
 - Auto-answer "phone call" style incoming-call UI
 - Always-on microphone
 - Raw/self-hosted WebRTC signaling server
-- Push notifications that reach you with the viewer closed — considered for
-  the doorbell, deliberately dropped to avoid needing a server-side
-  component to build and maintain. The doorbell only alerts a viewer that's
-  already open and connected. Revisit with a third-party push service
-  (OneSignal etc.) or a serverless function if this changes.
+- ~~Push notifications that reach you with the viewer closed~~ — implemented
+  via ntfy.sh, see "Doorbell push notifications" below. Originally dropped
+  to avoid needing a server-side component; ntfy.sh's free hosted relay
+  solves that without one.
 - ~~Motion-triggered quality ramp-up~~ — being revisited: see the open
   "selectable operating mode" item below. The doorbell button is a
   deliberately different, simpler thing (an explicit visitor action, not

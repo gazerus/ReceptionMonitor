@@ -37,6 +37,19 @@ export interface VideoQualityConfig {
   talk: TalkVideoConfig;
 }
 
+export interface DoorbellPushConfig {
+  /**
+   * ntfy.sh topic the tablet posts to on doorbell press -- treat this like a
+   * shared secret slug (anyone who knows it can publish or subscribe), not
+   * a public identifier.
+   */
+  ntfyTopic: string;
+  /** Defaults to https://ntfy.sh; override only if self-hosting ntfy. */
+  ntfyBaseUrl?: string;
+  /** Opened when the push notification itself is tapped -- typically the viewer page. */
+  clickUrl?: string;
+}
+
 export interface AppConfig {
   room: RoomConfig;
   schedule: ScheduleConfig;
@@ -47,4 +60,6 @@ export interface AppConfig {
    * within this many seconds, the reception app drops back to ambient mode.
    */
   talkSessionTimeoutSeconds: number;
+  /** Optional: reaches Garry's phone via a real OS push even if the viewer page is closed/minimized. */
+  doorbellPush?: DoorbellPushConfig;
 }
