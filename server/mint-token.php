@@ -2,10 +2,9 @@
 /**
  * Optional, recommended-for-production access control.
  *
- * The MVP viewer gates access with a client-side email check against
- * allowlist.json (see packages/shared/src/config.default.json) — good
- * enough to keep casual visitors out, but not real security since the
- * check runs in the browser.
+ * The MVP viewer gates access with a client-side shared-code check (see
+ * VIEWER_CODE in packages/viewer/src/App.tsx) — good enough to keep casual
+ * visitors out, but not real security since the check runs in the browser.
  *
  * This script does the real check server-side and mints a scoped Daily.co
  * meeting token, which Daily will actually enforce. It's a stateless PHP
@@ -27,7 +26,8 @@ declare(strict_types=1);
 header('Content-Type: application/json');
 
 // secrets.php is NOT committed to the repo — see server/secrets.example.php.
-// It must define DAILY_API_KEY (from the Daily.co dashboard) and ROOM_NAME.
+// It must define DAILY_API_KEY (from the Daily.co dashboard), ROOM_NAME, and
+// VIEWER_CODE (kept in sync with packages/viewer/src/App.tsx's VIEWER_CODE).
 require_once __DIR__ . '/secrets.php';
 
 function fail(int $status, string $message): never {
@@ -37,23 +37,13 @@ function fail(int $status, string $message): never {
 }
 
 $body = json_decode(file_get_contents('php://input') ?: '', true);
-$email = is_array($body) ? ($body['email'] ?? '') : '';
+$code = is_array($body) ? ($body['code'] ?? '') : '';
 
-if (!is_string($email) || $email === '') {
-    fail(400, 'Missing email');
+if (!is_string($code) || $code === '') {
+    fail(400, 'Missing code');
 }
 
-$configPath = __DIR__ . '/config.json';
-if (!is_file($configPath)) {
-    fail(500, 'Server misconfigured: config.json not found');
-}
-$config = json_decode((string) file_get_contents($configPath), true);
-$allowlist = array_map(
-    fn($e) => strtolower(trim($e)),
-    $config['allowlist']['viewers'] ?? []
-);
-
-if (!in_array(strtolower(trim($email)), $allowlist, true)) {
+if (!hash_equals(VIEWER_CODE, $code)) {
     fail(403, 'Not authorized');
 }
 
@@ -69,7 +59,7 @@ curl_setopt_array($ch, [
         'properties' => [
             'room_name' => ROOM_NAME,
             'is_owner' => false,
-            'user_name' => $email,
+            'user_name' => 'Viewer',
             'enable_screenshare' => false,
             // Viewer starts muted/camera-off; the client still flips these
             // locally when the Talk button is pressed.

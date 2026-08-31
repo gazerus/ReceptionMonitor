@@ -10,11 +10,6 @@ export interface ScheduleConfig {
   end: ClockTime;
 }
 
-export interface AllowlistConfig {
-  /** Email addresses permitted to view the reception feed / issue talk requests. */
-  viewers: string[];
-}
-
 export interface RoomConfig {
   /** Daily.co room URL, e.g. "https://your-domain.daily.co/reception". */
   roomUrl: string;
@@ -56,7 +51,6 @@ export interface DoorbellPushConfig {
 export interface AppConfig {
   room: RoomConfig;
   schedule: ScheduleConfig;
-  allowlist: AllowlistConfig;
   video: VideoQualityConfig;
   /**
    * Safety-net: if a talk session doesn't receive an explicit end signal

@@ -10,7 +10,6 @@ function isAppConfig(value: unknown): value is AppConfig {
   return (
     typeof v.room === "object" &&
     typeof v.schedule === "object" &&
-    typeof v.allowlist === "object" &&
     typeof v.video === "object" &&
     typeof v.talkSessionTimeoutSeconds === "number"
   );
@@ -36,7 +35,7 @@ function writeCache(config: AppConfig): void {
 }
 
 /**
- * Loads app config (room, schedule, allowlist, video quality) from a
+ * Loads app config (room, schedule, video quality) from a
  * hosted JSON file so hours/staff can be changed by editing that file,
  * with no app rebuild or redeploy. Falls back to the last-known-good
  * cached copy, then to the bundled default, if the fetch fails (e.g.

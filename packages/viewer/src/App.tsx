@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { DailyEventObjectAppMessage, DailyEventObjectTrack } from "@daily-co/daily-js";
-import { loadAppConfig, isAllowedViewer, type AppConfig } from "@reception/shared";
+import { loadAppConfig, type AppConfig } from "@reception/shared";
 import { ViewerRoom } from "./daily";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
-const SESSION_KEY = "reception-viewer-email";
+const SESSION_KEY = "reception-viewer-authorized";
+const VIEWER_CODE = "45656";
 
 // Two short beeps via the Web Audio API -- no asset to ship, and reliable
 // regardless of Notification permission/OS sound settings, since this
@@ -33,13 +34,14 @@ function playDoorbellBeep() {
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [email, setEmail] = useState(() => sessionStorage.getItem(SESSION_KEY) ?? "");
-  const [authorized, setAuthorized] = useState(false);
+  const [code, setCode] = useState("");
+  const [authorized, setAuthorized] = useState(() => sessionStorage.getItem(SESSION_KEY) === "true");
   const [authError, setAuthError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [talking, setTalking] = useState(false);
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
+  const [micGain, setMicGain] = useState(1);
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
@@ -58,12 +60,6 @@ export default function App() {
   useEffect(() => {
     void loadAppConfig(CONFIG_URL).then(setConfig);
   }, []);
-
-  useEffect(() => {
-    if (config && email && isAllowedViewer(email, config.allowlist)) {
-      setAuthorized(true);
-    }
-  }, [config, email]);
 
   useEffect(() => {
     // Best-effort: lets a doorbell press also fire a real OS-level
@@ -174,29 +170,40 @@ export default function App() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (isAllowedViewer(email, config.allowlist)) {
-              sessionStorage.setItem(SESSION_KEY, email);
+            if (code === VIEWER_CODE) {
+              sessionStorage.setItem(SESSION_KEY, "true");
               setAuthorized(true);
               setAuthError(null);
             } else {
-              setAuthError("That email isn't on the reception viewer list.");
+              setAuthError("Incorrect code.");
             }
           }}
           style={{ display: "flex", flexDirection: "column", gap: 12, width: 280 }}
         >
-          <h2 style={{ color: "#eee", margin: 0 }}>SET Reception</h2>
+          <h2 style={{ color: "#eee", margin: 0, textAlign: "center" }}>SET Reception</h2>
           <input
-            type="email"
+            type="password"
+            inputMode="numeric"
+            autoFocus
             required
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ padding: 10, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
+            placeholder="Code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            style={{
+              padding: 10,
+              borderRadius: 6,
+              border: "1px solid #444",
+              background: "#1a1a1a",
+              color: "#eee",
+              textAlign: "center",
+              fontSize: 20,
+              letterSpacing: 4,
+            }}
           />
           <button type="submit" style={{ padding: 10, borderRadius: 6, cursor: "pointer" }}>
             View feed
           </button>
-          {authError && <div style={{ color: "#f66", fontSize: 13 }}>{authError}</div>}
+          {authError && <div style={{ color: "#f66", fontSize: 13, textAlign: "center" }}>{authError}</div>}
         </form>
       </Centered>
     );
@@ -297,6 +304,27 @@ export default function App() {
           </button>
         )}
       </div>
+      {talking && (
+        <div style={{ padding: "0 16px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ color: "#888", fontSize: 12, whiteSpace: "nowrap" }}>Mic level</span>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.05}
+            value={micGain}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              setMicGain(value);
+              roomRef.current?.setMicGain(value);
+            }}
+            style={{ flex: 1 }}
+          />
+          <span style={{ color: "#888", fontSize: 12, width: 40, textAlign: "right" }}>
+            {Math.round(micGain * 100)}%
+          </span>
+        </div>
+      )}
     </div>
   );
 }

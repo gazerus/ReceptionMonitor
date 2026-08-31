@@ -12,7 +12,7 @@ covers what's implemented and what's still open.
 
 ```
 packages/
-  shared/     Config types + runtime config loader (schedule, allowlist, room, video quality)
+  shared/     Config types + runtime config loader (schedule, room, video quality)
   reception/  Capacitor + React + TS tablet app — joins the room on schedule, publishes
               ambient video, listens for talk requests
   viewer/     Plain Vite + React + TS web page — Garry's side, subscribe-only + Talk button
@@ -28,13 +28,12 @@ hosting). Talk-request signaling between viewer and tablet rides Daily's
 ## Key design choice: config is fetched at runtime, not baked into the build
 
 `packages/shared/src/configLoader.ts` fetches a single JSON config (room URL,
-schedule window, allowlist, video quality) from a URL at runtime, with a
+schedule window, video quality) from a URL at runtime, with a
 local cache and a bundled default as fallback if the tablet is briefly
 offline. **Point `VITE_CONFIG_URL` at a small JSON file hosted on the
-existing cPanel site**, and editing that file — changing hours, adding
-Sonja/Richie/Shane to the allowlist, tuning resolution — takes effect without
-rebuilding or redeploying either app. See `packages/shared/src/config.default.json`
-for the shape.
+existing cPanel site**, and editing that file — changing hours, tuning
+resolution — takes effect without rebuilding or redeploying either app. See
+`packages/shared/src/config.default.json` for the shape.
 
 ## What's implemented
 
@@ -65,15 +64,19 @@ for the shape.
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be
   minimized, switched away from, or closed by an accidental tap. The
   preference is remembered on-device and re-armed automatically each launch.
-- **Viewer**: fetches the same config, gates access with an email check
-  against the allowlist, joins subscribe-only (no local mic/camera sent
+- **Viewer**: fetches the same config, gates access with a shared numeric
+  code (`VIEWER_CODE` in `App.tsx`, currently `45656` — same code as the
+  tablet's settings panel), remembered for the browser session so it's only
+  entered once per session, joins subscribe-only (no local mic/camera sent
   until Talk is pressed), renders the reception feed, has a tap-to-toggle
   Talk button that publishes mic + front camera and signals the tablet
-  (with its own self-preview while active), and shows a banner + beep +
-  screen flash when the doorbell is pressed while connected.
-- **Access control**: allowlist is a plain array of emails in the shared
-  config — starts with just Garry, and adding Sonja/Richie/Shane later is a
-  one-line JSON edit, no code change.
+  (with its own self-preview and a mic-level slider while active, mainly a
+  testing aid for reducing feedback/reverb when the tablet and viewer are in
+  the same room), and shows a banner + beep + screen flash when the doorbell
+  is pressed while connected.
+- **Access control**: a single shared code rather than a per-person
+  allowlist — anyone with the code gets in, so it's a casual gate, not real
+  security (see "Optional hardening" below if that ever needs to change).
 
 Both `reception` and `viewer` typecheck and build cleanly (`npm run
 typecheck` / `npm run build` from the repo root).
@@ -100,7 +103,7 @@ to the hosted config JSON, not rebuilds:
 3. **Daily.co room**: created — `https://kwikvid.daily.co/ManningSt`, set to
    **public** for now so the app can be tested without wiring up token
    minting. Set it back to private once `server/mint-token.php` is actually
-   deployed and wired in, or accept the client-side allowlist gate as
+   deployed and wired in, or accept the client-side shared-code gate as
    "good enough" for an internal single-purpose tool.
 4. **Resolution/framerate**: defaulted to ambient **320×240 @ 3fps**, talk
    **640×480 @ 15fps**, per the spec's starting numbers. Tune after testing
@@ -111,7 +114,7 @@ to the hosted config JSON, not rebuilds:
 - **Viewer**: deployed and reachable at
   **https://gazerus.github.io/ReceptionMonitor/** (auto-redeploys on every
   push to `packages/viewer` or `packages/shared` via
-  `.github/workflows/deploy-viewer.yml`). Confirmed working — email gate,
+  `.github/workflows/deploy-viewer.yml`). Confirmed working — code gate,
   connects to the room.
 - **Reception app**: the native Android project is committed at
   `packages/reception/android/` (generated via `npx cap add android`, with
@@ -174,15 +177,15 @@ point `VITE_CONFIG_URL` at a hosted config with wider hours), rebuild step
 
 ## Optional hardening: server-side access control
 
-The viewer's allowlist check runs in the browser — fine to keep casual
-visitors out, but not real security since anyone can inspect the JS. If
-that turns out to matter, `server/mint-token.php` is a stateless PHP
-endpoint (works on the same shared cPanel hosting — no persistent process
-needed) that checks the allowlist server-side and mints a scoped Daily
-meeting token, which Daily actually enforces. It's not wired into the
-viewer app yet — copy `server/secrets.example.php` to `secrets.php` (never
-commit real secrets) and wire `call.join({ url, token })` in
-`packages/viewer/src/daily.ts` once you want it.
+The viewer's code check runs in the browser — fine to keep casual visitors
+out, but not real security since anyone can inspect the JS. If that turns
+out to matter, `server/mint-token.php` is a stateless PHP endpoint (works
+on the same shared cPanel hosting — no persistent process needed) that
+checks the code server-side and mints a scoped Daily meeting token, which
+Daily actually enforces. It's not wired into the viewer app yet — copy
+`server/secrets.example.php` to `secrets.php` (never commit real secrets)
+and wire `call.join({ url, token })` in `packages/viewer/src/daily.ts` once
+you want it.
 
 ## Doorbell push notifications (works with the viewer closed/minimized)
 
@@ -244,7 +247,8 @@ notification opens the viewer page directly (`doorbellPush.clickUrl`).
   is just a hash of the (already-public, in this repo) room URL, it's no
   more or less exposed than the repo itself already is — consistent with
   this project's existing "good enough for an internal tool" security
-  posture elsewhere (PIN `45656`, client-side allowlist).
+  posture elsewhere (the shared `45656` code used by both the tablet
+  settings and the viewer login).
 - This depends on ntfy.sh's free public service staying up — reasonable for
   an internal tool like this, but not a guaranteed-delivery SLA. If that
   ever matters, ntfy is open-source and self-hostable, or `doorbellPush`
