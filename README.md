@@ -64,19 +64,23 @@ resolution — takes effect without rebuilding or redeploying either app. See
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be
   minimized, switched away from, or closed by an accidental tap. The
   preference is remembered on-device and re-armed automatically each launch.
-- **Viewer**: fetches the same config, gates access with a shared numeric
-  code (`VIEWER_CODE` in `App.tsx`, currently `45656` — same code as the
-  tablet's settings panel), remembered for the browser session so it's only
-  entered once per session, joins subscribe-only (no local mic/camera sent
-  until Talk is pressed), renders the reception feed, has a tap-to-toggle
-  Talk button that publishes mic + front camera and signals the tablet
-  (with its own self-preview and a mic-level slider while active, mainly a
-  testing aid for reducing feedback/reverb when the tablet and viewer are in
-  the same room), and shows a banner + beep + screen flash when the doorbell
-  is pressed while connected.
-- **Access control**: a single shared code rather than a per-person
-  allowlist — anyone with the code gets in, so it's a casual gate, not real
-  security (see "Optional hardening" below if that ever needs to change).
+- **Viewer**: fetches the same config, gates access with one of two shared
+  codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
+  grants full access, `4680` grants **view-only** access — no Talk button,
+  no camera-switch button, and no mic/camera permission ever requested for
+  that session, just the feed. Either code is remembered for the browser
+  session so it's only entered once. Joins subscribe-only regardless (no
+  local mic/camera sent until Talk is pressed), renders the reception feed,
+  and (full access only) has a tap-to-toggle Talk button that publishes mic
+  + front camera and signals the tablet (with its own self-preview and a
+  mic-level slider while active, mainly a testing aid for reducing
+  feedback/reverb when the tablet and viewer are in the same room). Shows a
+  banner + beep + screen flash when the doorbell is pressed while
+  connected, for both access levels.
+- **Access control**: two shared codes rather than a per-person allowlist —
+  anyone with a code gets in at that code's access level, so it's a casual
+  gate, not real security (see "Optional hardening" below if that ever
+  needs to change).
 
 Both `reception` and `viewer` typecheck and build cleanly (`npm run
 typecheck` / `npm run build` from the repo root).

@@ -4,8 +4,16 @@ import { loadAppConfig, type AppConfig } from "@reception/shared";
 import { ViewerRoom } from "./daily";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
-const SESSION_KEY = "reception-viewer-authorized";
+const SESSION_KEY = "reception-viewer-role";
 const VIEWER_CODE = "45656";
+const VIEWER_CODE_READONLY = "4680";
+
+type ViewerRole = "full" | "readonly";
+
+function loadStoredRole(): ViewerRole | null {
+  const stored = sessionStorage.getItem(SESSION_KEY);
+  return stored === "full" || stored === "readonly" ? stored : null;
+}
 
 // Two short beeps via the Web Audio API -- no asset to ship, and reliable
 // regardless of Notification permission/OS sound settings, since this
@@ -35,7 +43,7 @@ function playDoorbellBeep() {
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [code, setCode] = useState("");
-  const [authorized, setAuthorized] = useState(() => sessionStorage.getItem(SESSION_KEY) === "true");
+  const [role, setRole] = useState<ViewerRole | null>(loadStoredRole);
   const [authError, setAuthError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [talking, setTalking] = useState(false);
@@ -66,13 +74,13 @@ export default function App() {
     // notification (with its default sound) while this page is open, on
     // top of the in-page beep/flash below. No service worker or server
     // involved -- this only ever shows while the page itself is alive.
-    if (authorized && "Notification" in window && Notification.permission === "default") {
+    if (role && "Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission();
     }
-  }, [authorized]);
+  }, [role]);
 
   useEffect(() => {
-    if (!authorized || !config) return;
+    if (!role || !config) return;
 
     const room = new ViewerRoom();
     roomRef.current = room;
@@ -158,21 +166,23 @@ export default function App() {
       setConnected(false);
       stopDoorbellAlert();
     };
-  }, [authorized, config]);
+  }, [role, config]);
 
   if (!config) {
     return <Centered>Loading…</Centered>;
   }
 
-  if (!authorized) {
+  if (!role) {
     return (
       <Centered>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (code === VIEWER_CODE) {
-              sessionStorage.setItem(SESSION_KEY, "true");
-              setAuthorized(true);
+            const enteredRole: ViewerRole | null =
+              code === VIEWER_CODE ? "full" : code === VIEWER_CODE_READONLY ? "readonly" : null;
+            if (enteredRole) {
+              sessionStorage.setItem(SESSION_KEY, enteredRole);
+              setRole(enteredRole);
               setAuthError(null);
             } else {
               setAuthError("Incorrect code.");
@@ -270,23 +280,25 @@ export default function App() {
         <span style={{ color: connected ? "#2e7d32" : "#888", alignSelf: "center", fontSize: 13 }}>
           {connected ? "Connected" : "Connecting…"}
         </span>
-        <button
-          onClick={toggleTalk}
-          style={{
-            padding: "14px 32px",
-            borderRadius: 999,
-            border: "none",
-            fontSize: 16,
-            fontWeight: 600,
-            cursor: "pointer",
-            background: talking ? "#c62828" : "#2e7d32",
-            color: "#fff",
-            userSelect: "none",
-          }}
-        >
-          {talking ? "End" : "Talk"}
-        </button>
-        {!talking && (
+        {role === "full" && (
+          <button
+            onClick={toggleTalk}
+            style={{
+              padding: "14px 32px",
+              borderRadius: 999,
+              border: "none",
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: talking ? "#c62828" : "#2e7d32",
+              color: "#fff",
+              userSelect: "none",
+            }}
+          >
+            {talking ? "End" : "Talk"}
+          </button>
+        )}
+        {role === "full" && !talking && (
           <button
             onClick={() => roomRef.current?.switchCamera()}
             title="Switch tablet camera"
@@ -304,7 +316,7 @@ export default function App() {
           </button>
         )}
       </div>
-      {talking && (
+      {role === "full" && talking && (
         <div style={{ padding: "0 16px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ color: "#888", fontSize: 12, whiteSpace: "nowrap" }}>Mic level</span>
           <input
