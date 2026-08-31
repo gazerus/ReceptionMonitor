@@ -12,6 +12,18 @@ const SETTINGS_PIN = "45656";
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
+/** Splits a locale-formatted time into the numeric part and the am/pm marker, so the marker can render smaller. */
+function splitClock(date: Date): { time: string; period: string } {
+  const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).formatToParts(date);
+  let time = "";
+  let period = "";
+  for (const part of parts) {
+    if (part.type === "dayPeriod") period = part.value;
+    else time += part.value;
+  }
+  return { time: time.trim(), period };
+}
+
 export default function App() {
   const [status, setStatus] = useState<Status>("loading");
   const [now, setNow] = useState(() => new Date());
@@ -174,7 +186,7 @@ export default function App() {
       }}
     >
       <div style={{ marginTop: 28, textAlign: "center" }}>
-        <div style={{ fontSize: 20, color: "#666" }}>Welcome to:</div>
+        <div style={{ fontSize: "clamp(36px, 6vw, 60px)", color: "#666" }}>Welcome to:</div>
         <GbcWordmark />
       </div>
 
@@ -201,7 +213,15 @@ export default function App() {
           overflow: "hidden",
         }}
       >
-        {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        {(() => {
+          const { time, period } = splitClock(now);
+          return (
+            <>
+              {time}
+              {period && <span style={{ fontSize: "0.5em" }}> {period}</span>}
+            </>
+          );
+        })()}
       </div>
 
       <audio ref={remoteAudioRef} autoPlay />
@@ -253,7 +273,16 @@ export default function App() {
 function GbcWordmark() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ fontFamily: "'Permanent Marker', cursive", fontSize: 64, lineHeight: 1, display: "flex", gap: 6, marginTop: 4 }}>
+      <div
+        style={{
+          fontFamily: "'Permanent Marker', cursive",
+          fontSize: "clamp(110px, 18vw, 180px)",
+          lineHeight: 1,
+          display: "flex",
+          gap: 10,
+          marginTop: 12,
+        }}
+      >
         <span style={{ color: "#2e7d32" }}>G</span>
         <span style={{ color: "#1565c0" }}>B</span>
         <span style={{ color: "#ef6c00" }}>C</span>
@@ -263,10 +292,11 @@ function GbcWordmark() {
           fontFamily: "Georgia, 'Times New Roman', serif",
           fontVariant: "small-caps",
           fontWeight: 700,
-          fontSize: 22,
-          letterSpacing: 3,
+          fontSize: "clamp(26px, 4.5vw, 46px)",
+          letterSpacing: 2,
           color: "#111",
-          marginTop: 2,
+          marginTop: 6,
+          textAlign: "center",
         }}
       >
         Gladstone Business Centre
