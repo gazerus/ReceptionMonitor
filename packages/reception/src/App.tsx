@@ -167,30 +167,43 @@ export default function App() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-        color: "#e5e5e5",
+        color: "#1a1a1a",
         fontFamily: "system-ui, sans-serif",
-        background: "#0a0a0a",
+        background: "#fdfdfd",
+        overflow: "hidden",
       }}
     >
-      <div style={{ fontSize: 20, letterSpacing: 1, opacity: 0.7 }}>SET Reception Monitor</div>
-      <StatusPill status={status} />
-      <DoorbellButton state={doorbellState} onPress={pressDoorbell} />
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 20, color: "#666" }}>Welcome to:</div>
+        <GbcWordmark />
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <StatusPill status={status} />
+      </div>
+
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <DoorbellButton state={doorbellState} onPress={pressDoorbell} />
+      </div>
+
       <div
         style={{
           position: "absolute",
-          bottom: 34,
-          left: "50%",
-          transform: "translateX(-50%)",
-          fontSize: 28,
-          fontVariantNumeric: "tabular-nums",
-          opacity: 0.85,
-          zIndex: 10,
+          bottom: 0,
+          left: 70,
+          right: 150,
+          fontFamily: "'Tangerine', cursive",
+          fontWeight: 700,
+          fontSize: "clamp(56px, 11vw, 110px)",
+          lineHeight: 1,
+          color: "#1a1a1a",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
         }}
       >
-        {now.toLocaleTimeString()}
+        {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
       </div>
+
       <audio ref={remoteAudioRef} autoPlay />
       <video
         ref={remoteVideoRef}
@@ -220,7 +233,7 @@ export default function App() {
           height: 90,
           objectFit: "cover",
           borderRadius: 8,
-          border: "1px solid #333",
+          border: "1px solid #ccc",
           background: "#000",
           zIndex: 10,
         }}
@@ -233,6 +246,31 @@ export default function App() {
           onToggleKiosk={toggleKiosk}
         />
       )}
+    </div>
+  );
+}
+
+function GbcWordmark() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ fontFamily: "'Permanent Marker', cursive", fontSize: 64, lineHeight: 1, display: "flex", gap: 6, marginTop: 4 }}>
+        <span style={{ color: "#2e7d32" }}>G</span>
+        <span style={{ color: "#1565c0" }}>B</span>
+        <span style={{ color: "#ef6c00" }}>C</span>
+      </div>
+      <div
+        style={{
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontVariant: "small-caps",
+          fontWeight: 700,
+          fontSize: 22,
+          letterSpacing: 3,
+          color: "#111",
+          marginTop: 2,
+        }}
+      >
+        Gladstone Business Centre
+      </div>
     </div>
   );
 }
@@ -303,9 +341,9 @@ function ScheduleSettings({
           width: 36,
           height: 36,
           borderRadius: "50%",
-          border: "1px solid #333",
-          background: "rgba(255,255,255,0.06)",
-          color: "#888",
+          border: "1px solid #ccc",
+          background: "rgba(0,0,0,0.05)",
+          color: "#666",
           fontSize: 16,
           zIndex: 10,
         }}
@@ -465,28 +503,34 @@ function ScheduleSettings({
 }
 
 function DoorbellButton({ state, onPress }: { state: "idle" | "rung"; onPress: () => void }) {
-  const label = {
-    idle: "Press for assistance",
-    rung: "Someone will be with you shortly",
-  }[state];
+  const idle = state === "idle";
+  const label = idle ? "Press for Assistance" : "Someone will be with you shortly";
 
   return (
-    <button
-      onClick={onPress}
-      disabled={state !== "idle"}
-      style={{
-        padding: "14px 28px",
-        borderRadius: 999,
-        border: "none",
-        fontSize: 16,
-        fontWeight: 600,
-        cursor: state === "idle" ? "pointer" : "default",
-        background: state === "rung" ? "#2e7d32" : "#1565c0",
-        color: "#fff",
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <button
+        onClick={onPress}
+        disabled={!idle}
+        aria-label="Press for assistance"
+        style={{
+          width: 220,
+          height: 220,
+          borderRadius: "50%",
+          border: "none",
+          cursor: idle ? "pointer" : "default",
+          background: idle ? "#00c3e3" : "#2e7d32",
+          boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
+          fontSize: 96,
+          lineHeight: "220px",
+          textAlign: "center",
+        }}
+      >
+        {idle ? "🔔" : "✅"}
+      </button>
+      <div style={{ fontSize: 22, fontWeight: 600, color: "#333", textAlign: "center", maxWidth: 280 }}>
+        {label}
+      </div>
+    </div>
   );
 }
 
