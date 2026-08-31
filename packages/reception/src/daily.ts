@@ -214,8 +214,14 @@ export class ReceptionRoom {
     const { width, height, frameRate } = this.config.video.talk;
     // Always front camera for talk sessions regardless of the ambient
     // facing mode -- the point is showing whoever's at the desk to Garry.
+    // Audio constraints are set explicitly here too: this is the device
+    // whose own speaker output (playing the viewer's voice) can re-enter
+    // its own mic and echo back to the viewer -- echoCancellation is what
+    // actually cancels that loop, so it's worth forcing on rather than
+    // trusting the platform default.
     await this.call.updateInputSettings({
       video: { settings: { width, height, frameRate, facingMode: "user" } },
+      audio: { settings: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
     });
   }
 
