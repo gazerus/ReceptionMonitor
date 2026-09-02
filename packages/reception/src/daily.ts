@@ -69,6 +69,16 @@ export class ReceptionRoom {
       // unmute instantly with no renegotiation delay.
       startAudioOff: true,
       startVideoOff: false,
+      // Requested at acquisition time, not just via a later
+      // updateInputSettings() call -- many browsers/WebViews only actually
+      // apply echoCancellation etc. when the mic is first grabbed, and
+      // silently ignore a later constraint change on an already-live track.
+      // This is the device whose own speaker plays the viewer's voice back
+      // out loud, so it's the one that most needs its own mic's AEC
+      // referencing that output correctly.
+      inputSettings: {
+        audio: { settings: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
+      },
     });
     call.on("app-message", this.handleAppMessage);
     call.on("camera-error", this.handleCameraError);
@@ -87,6 +97,9 @@ export class ReceptionRoom {
         url: this.config.room.roomUrl,
         startAudioOff: true,
         startVideoOff: false,
+        inputSettings: {
+          audio: { settings: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
+        },
       });
     } catch (err) {
       // Don't leave `this.call` pointing at a call object that never
@@ -167,6 +180,13 @@ export class ReceptionRoom {
       "readyState=",
       event?.track?.readyState,
     );
+    // Confirms whether the requested audio constraints actually landed on
+    // the live track -- some browsers/WebViews silently ignore constraints
+    // they don't support, so this is the only way to know for sure rather
+    // than assuming the request succeeded.
+    if (event?.participant?.local && event.track.kind === "audio") {
+      console.log("[reception] local audio track settings:", event.track.getSettings());
+    }
     if (!event?.participant?.local || event.track.kind !== "video") return;
     this.onLocalVideoTrack?.(event.track);
   };
