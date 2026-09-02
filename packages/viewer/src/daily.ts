@@ -38,10 +38,19 @@ export class ViewerRoom {
    * the on-screen level slider can attenuate it live -- mainly a testing aid
    * for when the tablet and viewer are in the same room and the tablet's own
    * speaker output re-entering its mic causes an audible echo/reverb.
+   *
+   * Echo cancellation is requested explicitly here rather than left to
+   * whatever the browser defaults to -- this is the device whose own
+   * speaker output (playing the tablet's/talk audio) can re-enter this same
+   * device's mic if it's on loudspeaker rather than earpiece/headphones,
+   * which reads as the same kind of feedback even with the two devices far
+   * apart, since the loop never leaves this one phone.
    */
   private async ensureMicProcessing(): Promise<MediaStreamTrack> {
     if (this.processedMicTrack) return this.processedMicTrack;
-    this.rawMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.rawMicStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioCtx();
     const source = this.audioContext.createMediaStreamSource(this.rawMicStream);
