@@ -54,13 +54,10 @@ export default function App() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
   const streamRef = useRef<MediaStream>(new MediaStream());
-  const doorbellTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doorbellIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopDoorbellAlert = () => {
-    if (doorbellTimeoutRef.current) clearTimeout(doorbellTimeoutRef.current);
     if (doorbellIntervalRef.current) clearInterval(doorbellIntervalRef.current);
-    doorbellTimeoutRef.current = null;
     doorbellIntervalRef.current = null;
     setDoorbellAlert(false);
   };
@@ -137,14 +134,13 @@ export default function App() {
           new Notification("SET Reception", { body: "Someone is at reception." });
         }
 
-        // Keep beeping while the page is open and the alert is showing --
-        // a single beep is easy to miss if nobody's looking right at the
-        // phone at that exact moment. Stops early if Talk is pressed, or
-        // after the window elapses.
-        if (doorbellTimeoutRef.current) clearTimeout(doorbellTimeoutRef.current);
+        // Keeps beeping until someone deals with it -- Talk or Acknowledge
+        // stop it (stopDoorbellAlert), otherwise it doesn't self-clear. A
+        // single beep, or one that gives up after a few seconds, is too
+        // easy to miss if nobody's looking right at the phone at that exact
+        // moment.
         if (doorbellIntervalRef.current) clearInterval(doorbellIntervalRef.current);
         doorbellIntervalRef.current = setInterval(playDoorbellBeep, 2500);
-        doorbellTimeoutRef.current = setTimeout(stopDoorbellAlert, 10_000);
       }
     };
 
@@ -238,11 +234,29 @@ export default function App() {
             padding: "10px 16px",
             background: "#1565c0",
             color: "#fff",
-            textAlign: "center",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
             fontWeight: 600,
           }}
         >
-          🔔 Someone is at reception
+          <span>🔔 Someone is at reception</span>
+          <button
+            onClick={stopDoorbellAlert}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.6)",
+              background: "transparent",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Acknowledge
+          </button>
         </div>
       )}
       <video

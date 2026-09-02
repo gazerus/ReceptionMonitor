@@ -75,8 +75,11 @@ resolution — takes effect without rebuilding or redeploying either app. See
   + front camera and signals the tablet (with its own self-preview and a
   mic-level slider while active, mainly a testing aid for reducing
   feedback/reverb when the tablet and viewer are in the same room). Shows a
-  banner + beep + screen flash when the doorbell is pressed while
-  connected, for both access levels.
+  banner + repeating beep + screen flash when the doorbell is pressed while
+  connected, for both access levels -- it keeps beeping until someone deals
+  with it (Talk, or an "Acknowledge" button on the banner itself that
+  clears the alert without starting a talk session), rather than timing
+  itself out.
 - **Access control**: two shared codes rather than a per-person allowlist —
   anyone with a code gets in at that code's access level, so it's a casual
   gate, not real security (see "Optional hardening" below if that ever
