@@ -110,7 +110,13 @@ resolution — takes effect without rebuilding or redeploying either app. See
   connected, for both access levels -- it keeps beeping until someone deals
   with it (Talk, or an "Acknowledge" button on the banner itself that
   clears the alert without starting a talk session), rather than timing
-  itself out.
+  itself out. Also has a ⛶ fullscreen toggle (both access levels, Android
+  only -- iOS Safari doesn't support the Fullscreen API), for when the
+  browser's own address bar eats into the usable space; the page's CSS
+  also uses `100dvh` rather than `100%`/`100vh` for the same underlying
+  reason (mobile browsers otherwise size the layout against the largest
+  possible viewport, not what's actually visible once the address bar is
+  showing, which trails the bottom controls off past the visible fold).
 - **Access control**: two shared codes rather than a per-person allowlist —
   anyone with a code gets in at that code's access level, so it's a casual
   gate, not real security (see "Optional hardening" below if that ever

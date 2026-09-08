@@ -50,6 +50,7 @@ export default function App() {
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
   const [micGain, setMicGain] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
@@ -65,6 +66,23 @@ export default function App() {
   useEffect(() => {
     void loadAppConfig(CONFIG_URL).then(setConfig);
   }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(document.fullscreenElement != null);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // Mobile browser chrome (address bar etc.) eats into the visible viewport
+  // even with the dvh fix in index.html -- true fullscreen removes it
+  // entirely. Not supported on iOS Safari, but this project is Android-only.
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch((err) => console.warn("[viewer] fullscreen request failed:", err));
+    }
+  };
 
   useEffect(() => {
     // Best-effort: lets a doorbell press also fire a real OS-level
@@ -294,6 +312,21 @@ export default function App() {
         <span style={{ color: connected ? "#2e7d32" : "#888", alignSelf: "center", fontSize: 13 }}>
           {connected ? "Connected" : "Connecting…"}
         </span>
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          style={{
+            padding: "14px 16px",
+            borderRadius: 999,
+            border: "1px solid #444",
+            fontSize: 16,
+            cursor: "pointer",
+            background: "#1a1a1a",
+            color: "#eee",
+          }}
+        >
+          {isFullscreen ? "⤦" : "⛶"}
+        </button>
         {role === "full" && (
           <button
             onClick={toggleTalk}
