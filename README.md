@@ -85,6 +85,16 @@ resolution — takes effect without rebuilding or redeploying either app. See
   a secure PIN/pattern lock (Android doesn't allow that), just shows the app
   the instant that's cleared — worth setting the tablet to no lock screen at
   all if it's staying in a fixed, physically secured spot anyway.
+  It also **restarts itself once a day at 6am** (`ScheduledRestartReceiver`,
+  scheduled via `AlarmManager.setAndAllowWhileIdle` and re-armed on every
+  app launch so it survives reboots) — a real failure mode showed up in
+  practice where the video kept playing locally but the clock, doorbell
+  button, and settings all froze solid (consistent with a long JS-thread/
+  garbage-collection hang after running for days, not the app being killed
+  outright), which nothing running in JS — including the remote wake-screen
+  message — can recover from. A clean daily process restart, timed outside
+  monitoring hours, sidesteps needing to chase down the exact leak. Change
+  `RESTART_HOUR` in that file (and rebuild) if 6am doesn't suit.
   Additionally, the doorbell button checks whether anyone is actually
   connected to the room at the moment it's pressed (`hasConnectedViewer()`
   in `daily.ts`) — if nobody is, it shows a different, configurable message

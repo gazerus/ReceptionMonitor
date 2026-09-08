@@ -20,5 +20,9 @@ public class MainActivity extends BridgeActivity {
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         );
+        // Idempotent -- just keeps the daily-restart alarm alive regardless
+        // of whether the app was launched fresh, via boot, or by the
+        // restart alarm itself.
+        ScheduledRestartReceiver.scheduleNext(this);
     }
 }
