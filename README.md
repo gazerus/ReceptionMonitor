@@ -64,6 +64,25 @@ resolution — takes effect without rebuilding or redeploying either app. See
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be
   minimized, switched away from, or closed by an accidental tap. The
   preference is remembered on-device and re-armed automatically each launch.
+  The app also **launches itself automatically after the tablet reboots**
+  (a `BootReceiver` listening for `BOOT_COMPLETED`, see
+  `android/app/src/main/java/au/com/set/reception/BootReceiver.java`) and
+  shows itself over the lock screen if there is one, so a dead battery or
+  power cut doesn't leave the tablet sitting unattended on a home/lock
+  screen until someone physically walks over and reopens it. Doesn't bypass
+  a secure PIN/pattern lock (Android doesn't allow that), just shows the app
+  the instant that's cleared — worth setting the tablet to no lock screen at
+  all if it's staying in a fixed, physically secured spot anyway.
+  Additionally, the doorbell button checks whether anyone is actually
+  connected to the room at the moment it's pressed (`hasConnectedViewer()`
+  in `daily.ts`) — if nobody is, it shows a different, configurable message
+  (`noReceptionistMessage` in the config, default: "No receptionist is
+  currently online. If you have a booking, please take a seat and someone
+  will be with you before your scheduled time.") instead of the normal
+  "someone will be with you shortly", which would otherwise be shown even
+  when literally nobody saw the press. The ntfy push (if configured) still
+  fires either way — that's precisely the mechanism for reaching someone
+  who isn't currently connected.
 - **Viewer**: fetches the same config, gates access with one of two shared
   codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
   grants full access, `4680` grants **view-only** access — no Talk button,

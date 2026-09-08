@@ -15,5 +15,6 @@
   "talkSessionTimeoutSeconds": 300,
   "doorbellPush": {
     "clickUrl": "https://gazerus.github.io/ReceptionMonitor/"
-  }
+  },
+  "noReceptionistMessage": "No receptionist is currently online. If you have a booking, please take a seat and someone will be with you before your scheduled time."
 }

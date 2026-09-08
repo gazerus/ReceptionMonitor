@@ -59,4 +59,12 @@ export interface AppConfig {
   talkSessionTimeoutSeconds: number;
   /** Optional: reaches Garry's phone via a real OS push even if the viewer page is closed/minimized. */
   doorbellPush?: DoorbellPushConfig;
+  /**
+   * Shown on the tablet when the doorbell is pressed and no viewer is
+   * currently connected -- lets a visitor know nobody's actively watching
+   * right now, rather than the normal "someone will be with you shortly"
+   * message, which would otherwise be shown regardless of whether anyone
+   * actually saw the press.
+   */
+  noReceptionistMessage?: string;
 }

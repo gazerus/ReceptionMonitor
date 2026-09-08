@@ -131,6 +131,16 @@ export class ReceptionRoom {
     );
   }
 
+  /**
+   * Whether anyone besides this tablet is currently connected to the room --
+   * lets the doorbell button tell a visitor honestly whether anybody's
+   * actually watching right now, rather than always implying someone is.
+   */
+  hasConnectedViewer(): boolean {
+    if (!this.call) return false;
+    return Object.values(this.call.participants()).some((p) => !p.local);
+  }
+
   /** Leaves the room and fully releases the camera/mic. */
   async leave(): Promise<void> {
     if (!this.call) return;

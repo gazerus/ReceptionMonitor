@@ -9,6 +9,10 @@ const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
 const SETTINGS_PIN = "45656";
+// Fallback only -- config.default.json always ships one, this just covers a
+// stale cached config from before this field existed.
+const DEFAULT_NO_RECEPTIONIST_MESSAGE =
+  "No receptionist is currently online. If you have a booking, please take a seat and someone will be with you before your scheduled time.";
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
@@ -33,7 +37,7 @@ export default function App() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
-  const [doorbellState, setDoorbellState] = useState<"idle" | "rung">("idle");
+  const [doorbellState, setDoorbellState] = useState<"idle" | "rung" | "no-receptionist">("idle");
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
   const [kioskEnabled, setKioskEnabled] = useState(() => loadKioskPreference());
   const tickNowRef = useRef<() => void>(() => {});
@@ -154,9 +158,20 @@ export default function App() {
 
   const pressDoorbell = () => {
     if (doorbellState !== "idle") return;
+    const hasViewer = roomRef.current?.hasConnectedViewer() ?? false;
+    // Still rings regardless -- the ntfy push (if configured) is exactly
+    // the mechanism for reaching someone who isn't currently connected, so
+    // this only changes what the visitor sees on the tablet itself.
     roomRef.current?.ringDoorbell();
-    setDoorbellState("rung");
-    setTimeout(() => setDoorbellState("idle"), 4000);
+    if (hasViewer) {
+      setDoorbellState("rung");
+      setTimeout(() => setDoorbellState("idle"), 4000);
+    } else {
+      // Longer window: this is real instructions for the visitor to read
+      // and act on, not just a "got it" confirmation.
+      setDoorbellState("no-receptionist");
+      setTimeout(() => setDoorbellState("idle"), 20_000);
+    }
   };
 
   const saveSchedule = (start: string, end: string) => {
@@ -195,7 +210,11 @@ export default function App() {
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <DoorbellButton state={doorbellState} onPress={pressDoorbell} />
+        <DoorbellButton
+          state={doorbellState}
+          onPress={pressDoorbell}
+          noReceptionistMessage={configRef.current?.noReceptionistMessage ?? DEFAULT_NO_RECEPTIONIST_MESSAGE}
+        />
       </div>
 
       <div
@@ -532,9 +551,24 @@ function ScheduleSettings({
   );
 }
 
-function DoorbellButton({ state, onPress }: { state: "idle" | "rung"; onPress: () => void }) {
+function DoorbellButton({
+  state,
+  onPress,
+  noReceptionistMessage,
+}: {
+  state: "idle" | "rung" | "no-receptionist";
+  onPress: () => void;
+  noReceptionistMessage: string;
+}) {
   const idle = state === "idle";
-  const label = idle ? "Press for Assistance" : "Someone will be with you shortly";
+  const label =
+    state === "idle"
+      ? "Press for Assistance"
+      : state === "rung"
+        ? "Someone will be with you shortly"
+        : noReceptionistMessage;
+  const icon = state === "idle" ? "🔔" : state === "rung" ? "✅" : "ℹ️";
+  const background = state === "idle" ? "#00c3e3" : state === "rung" ? "#2e7d32" : "#e65100";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -548,16 +582,16 @@ function DoorbellButton({ state, onPress }: { state: "idle" | "rung"; onPress: (
           borderRadius: "50%",
           border: "none",
           cursor: idle ? "pointer" : "default",
-          background: idle ? "#00c3e3" : "#2e7d32",
+          background,
           boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
           fontSize: 96,
           lineHeight: "220px",
           textAlign: "center",
         }}
       >
-        {idle ? "🔔" : "✅"}
+        {icon}
       </button>
-      <div style={{ fontSize: 22, fontWeight: 600, color: "#333", textAlign: "center", maxWidth: 280 }}>
+      <div style={{ fontSize: 22, fontWeight: 600, color: "#333", textAlign: "center", maxWidth: 340 }}>
         {label}
       </div>
     </div>
