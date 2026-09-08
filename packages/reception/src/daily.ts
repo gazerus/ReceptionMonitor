@@ -4,11 +4,13 @@ import Daily, {
   type DailyEventObjectTrack,
 } from "@daily-co/daily-js";
 import type { AppConfig } from "@reception/shared";
+import { Kiosk } from "./kiosk";
 
 export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
 export type SwitchCameraMessage = { type: "switch-camera" };
-type SignalMessage = TalkRequestMessage | TalkEndMessage | SwitchCameraMessage;
+export type WakeScreenMessage = { type: "wake-screen" };
+type SignalMessage = TalkRequestMessage | TalkEndMessage | SwitchCameraMessage | WakeScreenMessage;
 
 /**
  * Deterministic default ntfy.sh topic derived from the room URL, so any
@@ -33,7 +35,8 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     "type" in data &&
     ((data as { type: unknown }).type === "talk-request" ||
       (data as { type: unknown }).type === "talk-end" ||
-      (data as { type: unknown }).type === "switch-camera")
+      (data as { type: unknown }).type === "switch-camera" ||
+      (data as { type: unknown }).type === "wake-screen")
   );
 }
 
@@ -164,6 +167,12 @@ export class ReceptionRoom {
       void this.endTalkSession();
     } else if (event.data.type === "switch-camera") {
       void this.switchAmbientCamera();
+    } else if (event.data.type === "wake-screen") {
+      // Best-effort recovery for when Android/OEM battery optimization has
+      // put the screen to sleep despite the JS-side keep-awake flag --
+      // rejects harmlessly if the tablet's own Kiosk plugin isn't available
+      // (e.g. running in a browser tab during development).
+      Kiosk.wake().catch((err) => console.warn("[reception] wake-screen failed:", err));
     }
   };
 

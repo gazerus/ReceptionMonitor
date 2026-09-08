@@ -58,7 +58,19 @@ resolution — takes effect without rebuilding or redeploying either app. See
   editing the schedule's start/end times directly on the tablet — stored in
   that device's local storage (`scheduleOverride.ts`), so it survives app
   restarts without needing a rebuild or a hosted config. Keeps the screen
-  awake via `@capacitor-community/keep-awake`. The same settings panel has a
+  awake via `@capacitor-community/keep-awake`, re-applied every time the app
+  returns to the foreground (`watchAppResume()` in `wakeLock.ts`) in case
+  Android/OEM battery optimization ever clears the flag while backgrounded --
+  if the tablet's screen still goes dark despite this, check **Settings →
+  Apps → [this app] → Battery → Unrestricted** (and any manufacturer-specific
+  "sleeping apps"/"autostart manager" list), since AC power alone doesn't
+  exempt an app from that. The viewer also has a 💡 button (full access only)
+  that sends a `wake-screen` message forcing the tablet's screen back on
+  immediately (`KioskPlugin.wake()`), for recovering remotely without
+  someone needing to physically walk over and tap it -- only works if the
+  app's still running in the background (screen off, not the process
+  killed); a fully killed process needs the boot-launch behavior below or a
+  physical tap instead. The same settings panel has a
   **kiosk lock** toggle that pins the app to the screen via Android's
   built-in Screen Pinning (a tiny custom Capacitor plugin — `KioskPlugin.java`
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be

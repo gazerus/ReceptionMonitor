@@ -6,6 +6,8 @@ export interface KioskPlugin {
   isActive(): Promise<{ active: boolean }>;
   /** Best-effort deep link into Android's security settings, in case screen pinning has been disabled by a device policy. */
   openSecuritySettings(): Promise<void>;
+  /** Forces the screen back on right now (e.g. after Android/OEM battery optimization has put it to sleep). */
+  wake(): Promise<void>;
 }
 
 // No web implementation: kiosk lock is an Android-only, native-only feature.

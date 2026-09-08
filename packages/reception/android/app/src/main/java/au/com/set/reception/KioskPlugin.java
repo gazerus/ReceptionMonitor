@@ -5,6 +5,7 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.provider.Settings;
+import android.view.WindowManager;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -61,6 +62,29 @@ public class KioskPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("active", active);
         call.resolve(ret);
+    }
+
+    /**
+     * Forces the screen back on right now, in case it's gone dark despite
+     * the JS-side keep-awake flag -- most commonly caused by Android/OEM
+     * battery optimization pausing the app in the background, which a
+     * remote viewer has no other way to recover from short of someone
+     * physically walking over and tapping the tablet.
+     */
+    @PluginMethod
+    public void wake(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        activity.runOnUiThread(() -> activity.getWindow().addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+        ));
+        call.resolve();
     }
 
     /** Best-effort deep link into Android's security settings, in case screen pinning has been disabled by a device policy. */

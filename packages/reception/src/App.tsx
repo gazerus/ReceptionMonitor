@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadAppConfig, isWithinScheduleWindow, type AppConfig, type ScheduleConfig } from "@reception/shared";
 import { ReceptionRoom } from "./daily";
-import { keepScreenAwake } from "./wakeLock";
+import { keepScreenAwake, watchAppResume } from "./wakeLock";
 import { applyScheduleOverride, saveScheduleOverride } from "./scheduleOverride";
 import { Kiosk, loadKioskPreference, saveKioskPreference } from "./kiosk";
 
@@ -44,6 +44,7 @@ export default function App() {
 
   useEffect(() => {
     void keepScreenAwake();
+    watchAppResume();
 
     let cancelled = false;
     let scheduleTimer: ReturnType<typeof setInterval>;

@@ -329,6 +329,23 @@ export default function App() {
             🔄
           </button>
         )}
+        {role === "full" && !talking && (
+          <button
+            onClick={() => roomRef.current?.wakeScreen()}
+            title="Wake the tablet's screen"
+            style={{
+              padding: "14px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              fontSize: 16,
+              cursor: "pointer",
+              background: "#1a1a1a",
+              color: "#eee",
+            }}
+          >
+            💡
+          </button>
+        )}
       </div>
       {role === "full" && talking && (
         <div style={{ padding: "0 16px 16px", display: "flex", alignItems: "center", gap: 10 }}>
