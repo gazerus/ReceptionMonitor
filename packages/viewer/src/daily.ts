@@ -99,11 +99,6 @@ export class ViewerRoom {
     this.call.sendAppMessage({ type: "talk-end" }, "*");
   }
 
-  /** Flips the tablet's ambient camera front/back. Only meaningful outside a talk session. */
-  switchCamera(): void {
-    this.call?.sendAppMessage({ type: "switch-camera" }, "*");
-  }
-
   /** Forces the tablet's screen back on -- for when it's gone dark (e.g. Android/OEM battery optimization) and nobody's there to tap it. */
   wakeScreen(): void {
     this.call?.sendAppMessage({ type: "wake-screen" }, "*");

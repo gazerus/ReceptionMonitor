@@ -347,23 +347,6 @@ export default function App() {
         )}
         {role === "full" && !talking && (
           <button
-            onClick={() => roomRef.current?.switchCamera()}
-            title="Switch tablet camera"
-            style={{
-              padding: "14px 16px",
-              borderRadius: 999,
-              border: "1px solid #444",
-              fontSize: 16,
-              cursor: "pointer",
-              background: "#1a1a1a",
-              color: "#eee",
-            }}
-          >
-            🔄
-          </button>
-        )}
-        {role === "full" && !talking && (
-          <button
             onClick={() => roomRef.current?.wakeScreen()}
             title="Wake the tablet's screen"
             style={{

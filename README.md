@@ -107,9 +107,9 @@ resolution — takes effect without rebuilding or redeploying either app. See
   who isn't currently connected.
 - **Viewer**: fetches the same config, gates access with one of two shared
   codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
-  grants full access, `4680` grants **view-only** access — no Talk button,
-  no camera-switch button, and no mic/camera permission ever requested for
-  that session, just the feed. Either code is remembered for the browser
+  grants full access, `4680` grants **view-only** access — no Talk button
+  and no mic/camera permission ever requested for that session, just the
+  feed. Either code is remembered for the browser
   session so it's only entered once. Joins subscribe-only regardless (no
   local mic/camera sent until Talk is pressed), renders the reception feed,
   and (full access only) has a tap-to-toggle Talk button that publishes mic

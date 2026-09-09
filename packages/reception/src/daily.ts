@@ -8,9 +8,8 @@ import { Kiosk } from "./kiosk";
 
 export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
-export type SwitchCameraMessage = { type: "switch-camera" };
 export type WakeScreenMessage = { type: "wake-screen" };
-type SignalMessage = TalkRequestMessage | TalkEndMessage | SwitchCameraMessage | WakeScreenMessage;
+type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeScreenMessage;
 
 /**
  * Deterministic default ntfy.sh topic derived from the room URL, so any
@@ -35,7 +34,6 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     "type" in data &&
     ((data as { type: unknown }).type === "talk-request" ||
       (data as { type: unknown }).type === "talk-end" ||
-      (data as { type: unknown }).type === "switch-camera" ||
       (data as { type: unknown }).type === "wake-screen")
   );
 }
@@ -43,9 +41,6 @@ function isSignalMessage(data: unknown): data is SignalMessage {
 export class ReceptionRoom {
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
-  // Ambient-mode-only; talk sessions always use the front camera regardless
-  // of this, so switching cameras mid-conversation isn't a concern.
-  private ambientFacingMode: "user" | "environment" = "user";
 
   constructor(
     private config: AppConfig,
@@ -169,11 +164,6 @@ export class ReceptionRoom {
       void this.startTalkSession();
     } else if (event.data.type === "talk-end") {
       void this.endTalkSession();
-    } else if (event.data.type === "switch-camera") {
-      console.log("[reception] switch-camera received, current facingMode:", this.ambientFacingMode);
-      void this.switchAmbientCamera()
-        .then(() => console.log("[reception] switch-camera applied, new facingMode:", this.ambientFacingMode))
-        .catch((err) => console.warn("[reception] switch-camera failed:", err));
     } else if (event.data.type === "wake-screen") {
       // Best-effort recovery for when Android/OEM battery optimization has
       // put the screen to sleep despite the JS-side keep-awake flag --
@@ -250,22 +240,10 @@ export class ReceptionRoom {
   private async applyAmbientQuality(): Promise<void> {
     if (!this.call) return;
     const { width, height, frameRate } = this.config.video.ambient;
-    // Defaults to "user" (front/selfie camera) so the tablet faces whoever
-    // walks up to the desk; switchAmbientCamera() can flip it to
-    // "environment" for a quick look around the room.
-    const result = await this.call.updateInputSettings({
-      video: { settings: { width, height, frameRate, facingMode: this.ambientFacingMode } },
+    // Always front/selfie camera, facing whoever walks up to the desk.
+    await this.call.updateInputSettings({
+      video: { settings: { width, height, frameRate, facingMode: "user" } },
     });
-    // Confirms whether the requested facingMode actually landed -- some
-    // browsers/WebViews only honor certain constraints at initial track
-    // acquisition and silently ignore a later change (this bit us before
-    // with audio echoCancellation), so this checks rather than assumes.
-    console.log("[reception] applyAmbientQuality result:", JSON.stringify(result));
-    const liveVideoTrack = this.call.participants().local?.tracks?.video?.persistentTrack;
-    console.log(
-      "[reception] live video track settings after facingMode change:",
-      liveVideoTrack?.getSettings ? JSON.stringify(liveVideoTrack.getSettings()) : "no track",
-    );
   }
 
   private async applyTalkQuality(): Promise<void> {
@@ -282,12 +260,6 @@ export class ReceptionRoom {
       video: { settings: { width, height, frameRate, facingMode: "user" } },
       audio: { settings: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
     });
-  }
-
-  /** Flips the ambient camera between front/back. Only meaningful outside a talk session. */
-  private async switchAmbientCamera(): Promise<void> {
-    this.ambientFacingMode = this.ambientFacingMode === "user" ? "environment" : "user";
-    await this.applyAmbientQuality();
   }
 
   /** Un-mutes the mic and bumps video quality for the duration of the exchange. */
