@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.WindowManager;
 import com.getcapacitor.JSObject;
@@ -84,6 +85,26 @@ public class KioskPlugin extends Plugin {
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         ));
+
+        // Window flags are good at preventing sleep or showing the app the
+        // instant a lock screen clears, but aren't reliably forceful enough
+        // to pull the screen out of an already-asleep state on every
+        // device/OEM power-management implementation. A real PowerManager
+        // wake lock with ACQUIRE_CAUSES_WAKEUP is the more explicit,
+        // historically dependable API for that specific case -- observed in
+        // practice: the app itself stayed alive with the screen off (camera
+        // kept streaming), but this wake call alone wasn't turning the
+        // display back on.
+        PowerManager powerManager = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+        if (powerManager != null) {
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock wakeLock = powerManager.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE,
+                "au.com.set.reception:wake-screen"
+            );
+            wakeLock.acquire(10_000);
+        }
+
         call.resolve();
     }
 
