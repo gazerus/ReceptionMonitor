@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.WindowManager;
@@ -106,6 +108,45 @@ public class KioskPlugin extends Plugin {
         }
 
         call.resolve();
+    }
+
+    /**
+     * Whether "Display over other apps" is granted -- this is what exempts
+     * BootReceiver's startActivity() call from Android's background
+     * activity start restriction. Without it, the app's process still
+     * starts at boot (confirmed via Logcat: camera/WebRTC come up fine),
+     * but its window is never actually shown until someone taps the icon
+     * themselves, which defeats the point of an unattended kiosk display.
+     */
+    @PluginMethod
+    public void isOverlayGranted(PluginCall call) {
+        Activity activity = getActivity();
+        boolean granted = activity != null
+            && (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(activity));
+        JSObject ret = new JSObject();
+        ret.put("granted", granted);
+        call.resolve(ret);
+    }
+
+    /** Deep link to the "Display over other apps" grant screen for this app specifically. */
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        try {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + activity.getPackageName())
+            );
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to open overlay settings: " + e.getMessage());
+        }
     }
 
     /** Best-effort deep link into Android's security settings, in case screen pinning has been disabled by a device policy. */

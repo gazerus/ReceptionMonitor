@@ -8,6 +8,10 @@ export interface KioskPlugin {
   openSecuritySettings(): Promise<void>;
   /** Forces the screen back on right now (e.g. after Android/OEM battery optimization has put it to sleep). */
   wake(): Promise<void>;
+  /** Whether "Display over other apps" is granted -- required for the app to actually show itself when auto-launched after boot. */
+  isOverlayGranted(): Promise<{ granted: boolean }>;
+  /** Deep link to the "Display over other apps" grant screen for this app. */
+  openOverlaySettings(): Promise<void>;
 }
 
 // No web implementation: kiosk lock is an Android-only, native-only feature.

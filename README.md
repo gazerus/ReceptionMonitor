@@ -85,6 +85,16 @@ resolution — takes effect without rebuilding or redeploying either app. See
   a secure PIN/pattern lock (Android doesn't allow that), just shows the app
   the instant that's cleared — worth setting the tablet to no lock screen at
   all if it's staying in a fixed, physically secured spot anyway.
+  **Needs one manual one-time grant to actually show on screen**: Android's
+  "background activity start" restriction blocks `BootReceiver`'s
+  `startActivity()` call from becoming visible unless the app holds
+  "Display over other apps" — confirmed via Logcat on a real device (the
+  process started fine at boot, camera and WebRTC came up normally, but the
+  window itself was logged as a blocked background start and stayed
+  invisible until the icon was tapped manually). The settings panel shows
+  whether it's currently granted and links straight to the grant screen if
+  not (`Kiosk.isOverlayGranted()` / `openOverlaySettings()` in
+  `KioskPlugin.java`) — grant it once per tablet.
   It also **restarts itself once a day at 6am** (`ScheduledRestartReceiver`,
   scheduled via `AlarmManager.setAndAllowWhileIdle` and re-armed on every
   app launch so it survives reboots) — a real failure mode showed up in

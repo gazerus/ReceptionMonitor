@@ -342,6 +342,16 @@ function ScheduleSettings({
   const [start, setStart] = useState(schedule.start);
   const [end, setEnd] = useState(schedule.end);
   const [kioskError, setKioskError] = useState<string | null>(null);
+  const [overlayGranted, setOverlayGranted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Re-checked every time the panel opens, since granting happens in a
+    // separate Settings screen the user comes back from.
+    if (stage !== "edit") return;
+    Kiosk.isOverlayGranted()
+      .then(({ granted }) => setOverlayGranted(granted))
+      .catch(() => setOverlayGranted(null));
+  }, [stage]);
 
   const openPin = () => {
     setPin("");
@@ -531,6 +541,46 @@ function ScheduleSettings({
               <div style={{ color: "#999", fontSize: 12 }}>
                 To exit without the code: hold Back and Recent Apps together (varies by device).
               </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              borderTop: "1px solid #333",
+              paddingTop: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ color: "#eee", fontWeight: 600, fontSize: 14 }}>Boot auto-launch</div>
+            <div style={{ color: "#999", fontSize: 12, lineHeight: 1.4 }}>
+              After a power cut or restart, the app starts itself automatically -- but
+              Android hides it from view unless "Display over other apps" is granted, so
+              it can end up running invisibly in the background until someone taps its
+              icon. Status:{" "}
+              <strong style={{ color: overlayGranted ? "#2e7d32" : "#e65100" }}>
+                {overlayGranted === null ? "checking…" : overlayGranted ? "granted" : "not granted"}
+              </strong>
+            </div>
+            {!overlayGranted && (
+              <button
+                type="button"
+                onClick={() =>
+                  void Kiosk.openOverlaySettings().catch(() => setKioskError("Couldn't open Android settings."))
+                }
+                style={{
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid #444",
+                  background: "transparent",
+                  color: "#ccc",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Grant "Display over other apps"
+              </button>
             )}
           </div>
 

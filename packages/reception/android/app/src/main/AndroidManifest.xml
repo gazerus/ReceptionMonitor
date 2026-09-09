@@ -57,6 +57,15 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+      Documented exemption from Android's "background activity start"
+      restriction -- without it, BootReceiver's startActivity() call gets
+      logged as a blocked background start (isBgStartWhitelisted: false)
+      and the app runs invisibly rather than actually showing on screen.
+      Must still be granted manually via Settings; see
+      KioskPlugin.openOverlaySettings().
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>
