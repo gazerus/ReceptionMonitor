@@ -66,11 +66,19 @@ resolution — takes effect without rebuilding or redeploying either app. See
   "sleeping apps"/"autostart manager" list), since AC power alone doesn't
   exempt an app from that. The viewer also has a 💡 button (full access only)
   that sends a `wake-screen` message forcing the tablet's screen back on
-  immediately (`KioskPlugin.wake()`), for recovering remotely without
-  someone needing to physically walk over and tap it -- only works if the
-  app's still running in the background (screen off, not the process
-  killed); a fully killed process needs the boot-launch behavior below or a
-  physical tap instead. The same settings panel has a
+  immediately (`KioskPlugin.wake()`, using a real `PowerManager.WakeLock`
+  with `ACQUIRE_CAUSES_WAKEUP` rather than just window flags, which weren't
+  forceful enough to pull an already-asleep screen back on on this
+  hardware), for recovering remotely without someone needing to physically
+  walk over and tap it -- only works if the app's still running in the
+  background (screen off, not the process killed); a fully killed process
+  needs the boot-launch behavior below or a physical tap instead. The
+  tablet also broadcasts whether its screen is currently on/off every few
+  seconds (`Kiosk.isScreenOn()`, `PowerManager.isInteractive()`), and the
+  viewer shows this next to the connection status -- otherwise there'd be
+  no way to tell whether wake-screen actually worked, since the video feed
+  keeps streaming either way regardless of the tablet's screen state. The
+  same settings panel has a
   **kiosk lock** toggle that pins the app to the screen via Android's
   built-in Screen Pinning (a tiny custom Capacitor plugin — `KioskPlugin.java`
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be

@@ -110,6 +110,19 @@ public class KioskPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Whether the physical display is currently on/interactive -- lets the viewer see whether wake-screen actually worked, rather than guessing from the video feed alone (which keeps streaming either way). */
+    @PluginMethod
+    public void isScreenOn(PluginCall call) {
+        Activity activity = getActivity();
+        PowerManager powerManager = activity == null
+            ? null
+            : (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+        boolean on = powerManager != null && powerManager.isInteractive();
+        JSObject ret = new JSObject();
+        ret.put("on", on);
+        call.resolve(ret);
+    }
+
     /**
      * Whether "Display over other apps" is granted -- this is what exempts
      * BootReceiver's startActivity() call from Android's background

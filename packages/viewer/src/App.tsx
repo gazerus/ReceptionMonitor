@@ -49,6 +49,7 @@ export default function App() {
   const [talking, setTalking] = useState(false);
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
+  const [tabletScreenOn, setTabletScreenOn] = useState<boolean | null>(null);
   const [micGain, setMicGain] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -140,12 +141,10 @@ export default function App() {
     // Doorbell alert: only fires if this page is open and connected --
     // deliberately no server-side push infrastructure behind this.
     const handleAppMessage = (event?: DailyEventObjectAppMessage) => {
-      if (
-        event &&
-        typeof event.data === "object" &&
-        event.data !== null &&
-        (event.data as { type?: unknown }).type === "doorbell"
-      ) {
+      if (!event || typeof event.data !== "object" || event.data === null) return;
+      const data = event.data as { type?: unknown; on?: unknown };
+
+      if (data.type === "doorbell") {
         setDoorbellAlert(true);
         playDoorbellBeep();
         if ("Notification" in window && Notification.permission === "granted") {
@@ -159,6 +158,8 @@ export default function App() {
         // moment.
         if (doorbellIntervalRef.current) clearInterval(doorbellIntervalRef.current);
         doorbellIntervalRef.current = setInterval(playDoorbellBeep, 2500);
+      } else if (data.type === "screen-status" && typeof data.on === "boolean") {
+        setTabletScreenOn(data.on);
       }
     };
 
@@ -178,6 +179,7 @@ export default function App() {
       stream.getTracks().forEach((t) => stream.removeTrack(t));
       void room.leave();
       setConnected(false);
+      setTabletScreenOn(null);
       stopDoorbellAlert();
     };
   }, [role, config]);
@@ -312,6 +314,14 @@ export default function App() {
         <span style={{ color: connected ? "#2e7d32" : "#888", alignSelf: "center", fontSize: 13 }}>
           {connected ? "Connected" : "Connecting…"}
         </span>
+        {tabletScreenOn !== null && (
+          <span
+            title="Whether the reception tablet's own screen is currently on"
+            style={{ color: tabletScreenOn ? "#2e7d32" : "#e65100", alignSelf: "center", fontSize: 13 }}
+          >
+            {tabletScreenOn ? "Tablet screen on" : "Tablet screen off"}
+          </span>
+        )}
         <button
           onClick={toggleFullscreen}
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}

@@ -38,9 +38,12 @@ function isSignalMessage(data: unknown): data is SignalMessage {
   );
 }
 
+const SCREEN_STATUS_INTERVAL_MS = 5000;
+
 export class ReceptionRoom {
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
+  private screenStatusTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private config: AppConfig,
@@ -120,6 +123,12 @@ export class ReceptionRoom {
     // startVideoOff isn't enough on its own either.
     call.setLocalVideo(true);
 
+    // Lets the viewer see whether the tablet's screen is actually on --
+    // the video feed keeps streaming either way, so that alone can't tell
+    // anyone whether e.g. the wake-screen button actually worked.
+    void this.broadcastScreenStatus();
+    this.screenStatusTimer = setInterval(() => void this.broadcastScreenStatus(), SCREEN_STATUS_INTERVAL_MS);
+
     const localVideo = call.participants().local?.tracks?.video;
     console.log(
       "[reception] post-join local video track state:",
@@ -143,6 +152,10 @@ export class ReceptionRoom {
   async leave(): Promise<void> {
     if (!this.call) return;
     this.clearTalkTimeout();
+    if (this.screenStatusTimer) {
+      clearInterval(this.screenStatusTimer);
+      this.screenStatusTimer = null;
+    }
     this.call.off("app-message", this.handleAppMessage);
     this.call.off("camera-error", this.handleCameraError);
     this.call.off("track-started", this.handleLocalTrackStarted);
@@ -171,10 +184,25 @@ export class ReceptionRoom {
       // (e.g. running in a browser tab during development).
       console.log("[reception] wake-screen received, calling Kiosk.wake()");
       Kiosk.wake()
-        .then(() => console.log("[reception] Kiosk.wake() resolved"))
+        .then(() => {
+          console.log("[reception] Kiosk.wake() resolved");
+          // Immediate follow-up rather than waiting for the next periodic
+          // tick, so the viewer gets fast confirmation of whether it worked.
+          setTimeout(() => void this.broadcastScreenStatus(), 500);
+        })
         .catch((err) => console.warn("[reception] wake-screen failed:", err));
     }
   };
+
+  private async broadcastScreenStatus(): Promise<void> {
+    if (!this.call) return;
+    try {
+      const { on } = await Kiosk.isScreenOn();
+      this.call.sendAppMessage({ type: "screen-status", on }, "*");
+    } catch {
+      // Kiosk plugin unavailable (e.g. running in a browser tab) -- nothing to report.
+    }
+  }
 
   // Daily doesn't fail join() over a camera/mic acquisition problem — it
   // just joins without that track and emits this instead. Without

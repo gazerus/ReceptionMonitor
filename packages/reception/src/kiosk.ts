@@ -8,6 +8,8 @@ export interface KioskPlugin {
   openSecuritySettings(): Promise<void>;
   /** Forces the screen back on right now (e.g. after Android/OEM battery optimization has put it to sleep). */
   wake(): Promise<void>;
+  /** Whether the physical display is currently on/interactive. */
+  isScreenOn(): Promise<{ on: boolean }>;
   /** Whether "Display over other apps" is granted -- required for the app to actually show itself when auto-launched after boot. */
   isOverlayGranted(): Promise<{ granted: boolean }>;
   /** Deep link to the "Display over other apps" grant screen for this app. */
