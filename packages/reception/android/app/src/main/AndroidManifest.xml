@@ -59,8 +59,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!--
       Documented exemption from Android's "background activity start"
-      restriction -- without it, BootReceiver's startActivity() call gets
-      logged as a blocked background start (isBgStartWhitelisted: false)
+      restriction. Without it, BootReceiver's startActivity() call gets
+      logged as a blocked background start (isBgStartWhitelisted: false),
       and the app runs invisibly rather than actually showing on screen.
       Must still be granted manually via Settings; see
       KioskPlugin.openOverlaySettings().
