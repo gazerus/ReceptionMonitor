@@ -90,7 +90,9 @@ export default function App() {
     // notification (with its default sound) while this page is open, on
     // top of the in-page beep/flash below. No service worker or server
     // involved -- this only ever shows while the page itself is alive.
-    if (role && "Notification" in window && Notification.permission === "default") {
+    // View-only sessions never receive doorbell alerts at all (see
+    // handleAppMessage below), so there's nothing to request permission for.
+    if (role === "full" && "Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission();
     }
   }, [role]);
@@ -138,9 +140,12 @@ export default function App() {
       if (event.track.kind === "audio") setRemoteAudioActive(false);
     };
 
-    // Doorbell alert: only fires if this page is open and connected --
-    // deliberately no server-side push infrastructure behind this.
+    // Doorbell alert and tablet screen-status: view-only sessions are meant
+    // to be nothing but the raw feed, so both are skipped entirely for that
+    // role -- no server-side push infrastructure behind the doorbell alert
+    // either way.
     const handleAppMessage = (event?: DailyEventObjectAppMessage) => {
+      if (role !== "full") return;
       if (!event || typeof event.data !== "object" || event.data === null) return;
       const data = event.data as { type?: unknown; on?: unknown };
 

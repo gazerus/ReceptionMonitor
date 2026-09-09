@@ -125,20 +125,24 @@ resolution — takes effect without rebuilding or redeploying either app. See
   who isn't currently connected.
 - **Viewer**: fetches the same config, gates access with one of two shared
   codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
-  grants full access, `4680` grants **view-only** access — no Talk button
-  and no mic/camera permission ever requested for that session, just the
-  feed. Either code is remembered for the browser
+  grants full access, `4680` grants **view-only** access — just the raw
+  feed, nothing else: no Talk button, no mic/camera permission ever
+  requested for that session, no tablet screen on/off indicator, and no
+  doorbell banner/beep/flash/Acknowledge either (`handleAppMessage` skips
+  entirely for this role) — intended for handing out to tenants who should
+  just be able to check the feed, not be notified of anything or control
+  the tablet. Either code is remembered for the browser
   session so it's only entered once. Joins subscribe-only regardless (no
   local mic/camera sent until Talk is pressed), renders the reception feed,
   and (full access only) has a tap-to-toggle Talk button that publishes mic
   + front camera and signals the tablet (with its own self-preview and a
   mic-level slider while active, mainly a testing aid for reducing
-  feedback/reverb when the tablet and viewer are in the same room). Shows a
-  banner + repeating beep + screen flash when the doorbell is pressed while
-  connected, for both access levels -- it keeps beeping until someone deals
-  with it (Talk, or an "Acknowledge" button on the banner itself that
+  feedback/reverb when the tablet and viewer are in the same room). Also
+  (full access only) shows a banner + repeating beep + screen flash when
+  the doorbell is pressed while connected -- it keeps beeping until someone
+  deals with it (Talk, or an "Acknowledge" button on the banner itself that
   clears the alert without starting a talk session), rather than timing
-  itself out. Also has a ⛶ fullscreen toggle (both access levels, Android
+  itself out. Has a ⛶ fullscreen toggle (both access levels, Android
   only -- iOS Safari doesn't support the Fullscreen API), for when the
   browser's own address bar eats into the usable space; the page's CSS
   also uses `100dvh` rather than `100%`/`100vh` for the same underlying
