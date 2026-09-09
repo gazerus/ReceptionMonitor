@@ -84,6 +84,12 @@ resolution — takes effect without rebuilding or redeploying either app. See
   / `src/kiosk.ts` — calling `Activity.startLockTask()`), so the app can't be
   minimized, switched away from, or closed by an accidental tap. The
   preference is remembered on-device and re-armed automatically each launch.
+  The settings panel (PIN-gated) also shows the kiosk-exit hint ("hold Back
+  and Recent Apps together") and other admin controls — since that whole
+  panel covers the ambient feed, it **auto-closes back to the plain gear
+  icon after 5 seconds of no interaction**, so it can't be left open by
+  accident, sitting there advertising how to get past the lock to anyone
+  standing at reception.
   The app also **launches itself automatically after the tablet reboots**
   (a `BootReceiver` listening for `BOOT_COMPLETED`, see
   `android/app/src/main/java/au/com/set/reception/BootReceiver.java`) and
@@ -93,16 +99,27 @@ resolution — takes effect without rebuilding or redeploying either app. See
   a secure PIN/pattern lock (Android doesn't allow that), just shows the app
   the instant that's cleared — worth setting the tablet to no lock screen at
   all if it's staying in a fixed, physically secured spot anyway.
-  **Needs one manual one-time grant to actually show on screen**: Android's
-  "background activity start" restriction blocks `BootReceiver`'s
-  `startActivity()` call from becoming visible unless the app holds
-  "Display over other apps" — confirmed via Logcat on a real device (the
-  process started fine at boot, camera and WebRTC came up normally, but the
-  window itself was logged as a blocked background start and stayed
-  invisible until the icon was tapped manually). The settings panel shows
-  whether it's currently granted and links straight to the grant screen if
-  not (`Kiosk.isOverlayGranted()` / `openOverlaySettings()` in
-  `KioskPlugin.java`) — grant it once per tablet.
+  **Needs one manual one-time step to actually show on screen at boot**:
+  Android's "background activity start" restriction blocks
+  `BootReceiver`'s `startActivity()` call from becoming visible — confirmed
+  via Logcat on a real device (the process started fine at boot, camera and
+  WebRTC came up normally, but the window itself was logged as a blocked
+  background start and stayed invisible until the icon was tapped
+  manually). Granting "Display over other apps" was tried first but turned
+  out **not** to be sufficient on its own in practice (still didn't show on
+  boot even once granted) — holding that permission isn't the same as the
+  app actually being exempt from the restriction. The reliable fix is
+  instead to set the app as the tablet's **Home app**: the system launches
+  its default Home app directly as part of normal boot, which isn't a
+  "background" activity start at all, so the restriction never applies.
+  The settings panel shows whether it's currently set as Home and links
+  straight to the picker if not (`Kiosk.isDefaultHome()` /
+  `openHomeSettings()` in `KioskPlugin.java`, deep-linking
+  `Settings.ACTION_HOME_SETTINGS`) — set it once per tablet (press the
+  Home button and choose "Always", or use the in-app button). "Display
+  over other apps" is kept as a secondary fallback grant, in case it helps
+  on a different Android version/OEM skin, but shouldn't be relied on
+  alone.
   It also **restarts itself once a day at 6am** (`ScheduledRestartReceiver`,
   scheduled via `AlarmManager.setAndAllowWhileIdle` and re-armed on every
   app launch so it survives reboots) — a real failure mode showed up in

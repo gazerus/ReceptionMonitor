@@ -14,6 +14,10 @@ export interface KioskPlugin {
   isOverlayGranted(): Promise<{ granted: boolean }>;
   /** Deep link to the "Display over other apps" grant screen for this app. */
   openOverlaySettings(): Promise<void>;
+  /** Whether this app is currently the device's default Home app -- the reliable way to get it on screen at boot. */
+  isDefaultHome(): Promise<{ isDefault: boolean }>;
+  /** Deep link to Android's "Default apps -> Home app" picker. */
+  openHomeSettings(): Promise<void>;
 }
 
 // No web implementation: kiosk lock is an Android-only, native-only feature.

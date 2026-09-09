@@ -343,6 +343,11 @@ function ScheduleSettings({
   const [end, setEnd] = useState(schedule.end);
   const [kioskError, setKioskError] = useState<string | null>(null);
   const [overlayGranted, setOverlayGranted] = useState<boolean | null>(null);
+  const [isDefaultHome, setIsDefaultHome] = useState<boolean | null>(null);
+  const lastActivityRef = useRef(Date.now());
+  const bumpActivity = () => {
+    lastActivityRef.current = Date.now();
+  };
 
   useEffect(() => {
     // Re-checked every time the panel opens, since granting happens in a
@@ -351,6 +356,25 @@ function ScheduleSettings({
     Kiosk.isOverlayGranted()
       .then(({ granted }) => setOverlayGranted(granted))
       .catch(() => setOverlayGranted(null));
+    Kiosk.isDefaultHome()
+      .then(({ isDefault }) => setIsDefaultHome(isDefault))
+      .catch(() => setIsDefaultHome(null));
+  }, [stage]);
+
+  useEffect(() => {
+    // The PIN pad and the settings panel both cover the whole ambient feed
+    // and reveal how to get past the kiosk lock -- if someone opens this and
+    // walks away, it shouldn't sit there advertising that to anyone at
+    // reception. Auto-close back to the plain gear icon after 5s idle.
+    if (stage === "closed") return;
+    bumpActivity();
+    const IDLE_TIMEOUT_MS = 5000;
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= IDLE_TIMEOUT_MS) {
+        setStage("closed");
+      }
+    }, 500);
+    return () => clearInterval(interval);
   }, [stage]);
 
   const openPin = () => {
@@ -415,6 +439,9 @@ function ScheduleSettings({
 
   return (
     <div
+      onClick={bumpActivity}
+      onKeyDown={bumpActivity}
+      onChange={bumpActivity}
       style={{
         position: "absolute",
         inset: 0,
@@ -555,10 +582,36 @@ function ScheduleSettings({
           >
             <div style={{ color: "#eee", fontWeight: 600, fontSize: 14 }}>Boot auto-launch</div>
             <div style={{ color: "#999", fontSize: 12, lineHeight: 1.4 }}>
-              After a power cut or restart, the app starts itself automatically -- but
-              Android hides it from view unless "Display over other apps" is granted, so
-              it can end up running invisibly in the background until someone taps its
-              icon. Status:{" "}
+              The reliable way to make the app appear on screen right after a power cut
+              or restart is to set it as this tablet's Home app -- that's what the
+              system shows automatically at boot, with no extra permission needed.
+              Status:{" "}
+              <strong style={{ color: isDefaultHome ? "#2e7d32" : "#e65100" }}>
+                {isDefaultHome === null ? "checking…" : isDefaultHome ? "set as Home app" : "not set as Home app"}
+              </strong>
+            </div>
+            {!isDefaultHome && (
+              <button
+                type="button"
+                onClick={() =>
+                  void Kiosk.openHomeSettings().catch(() => setKioskError("Couldn't open Android settings."))
+                }
+                style={{
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid #444",
+                  background: "transparent",
+                  color: "#ccc",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Set as Home app
+              </button>
+            )}
+            <div style={{ color: "#999", fontSize: 12, lineHeight: 1.4 }}>
+              "Display over other apps" is a secondary, less reliable fallback for the
+              same problem. Status:{" "}
               <strong style={{ color: overlayGranted ? "#2e7d32" : "#e65100" }}>
                 {overlayGranted === null ? "checking…" : overlayGranted ? "granted" : "not granted"}
               </strong>

@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
@@ -159,6 +161,50 @@ public class KioskPlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("Failed to open overlay settings: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Whether this app is currently the device's default Home app. Being the
+     * default Home app is what makes the system launch it directly at boot,
+     * without going through BootReceiver's startActivity() call at all --
+     * sidestepping the background activity start restriction entirely rather
+     * than trying to get an exemption from it.
+     */
+    @PluginMethod
+    public void isDefaultHome(PluginCall call) {
+        Activity activity = getActivity();
+        boolean isDefault = false;
+        if (activity != null) {
+            Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+            homeIntent.addCategory(Intent.CATEGORY_HOME);
+            ResolveInfo resolveInfo = activity
+                .getPackageManager()
+                .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY);
+            isDefault = resolveInfo != null
+                && resolveInfo.activityInfo != null
+                && activity.getPackageName().equals(resolveInfo.activityInfo.packageName);
+        }
+        JSObject ret = new JSObject();
+        ret.put("isDefault", isDefault);
+        call.resolve(ret);
+    }
+
+    /** Deep link to Android's "Default apps -> Home app" picker, so the app can be set as the device's Home app. */
+    @PluginMethod
+    public void openHomeSettings(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_HOME_SETTINGS);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to open Home app settings: " + e.getMessage());
         }
     }
 

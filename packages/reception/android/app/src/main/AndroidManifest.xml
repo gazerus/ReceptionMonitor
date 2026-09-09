@@ -22,6 +22,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+              Lets this app be set as the device's Home app. A boot's default
+              Home activity is launched by the system itself as part of normal
+              boot, which is not subject to the "background activity start"
+              restriction that blocks BootReceiver's own startActivity() call
+              on some Android versions even with SYSTEM_ALERT_WINDOW granted.
+              This is the reliable fix; BootReceiver is kept as a fallback.
+              Requires a one-time manual step: user picks this app as Home
+              (press the Home button once and choose "Always", or Settings ->
+              Apps -> Default apps -> Home app).
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
         </activity>
 
         <provider
