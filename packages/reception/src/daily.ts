@@ -160,19 +160,29 @@ export class ReceptionRoom {
   }
 
   private handleAppMessage = (event?: DailyEventObjectAppMessage) => {
-    if (!event || !isSignalMessage(event.data)) return;
+    console.log("[reception] app-message received:", JSON.stringify(event?.data));
+    if (!event || !isSignalMessage(event.data)) {
+      console.log("[reception] app-message ignored (not a recognized signal message)");
+      return;
+    }
     if (event.data.type === "talk-request") {
       void this.startTalkSession();
     } else if (event.data.type === "talk-end") {
       void this.endTalkSession();
     } else if (event.data.type === "switch-camera") {
-      void this.switchAmbientCamera();
+      console.log("[reception] switch-camera received, current facingMode:", this.ambientFacingMode);
+      void this.switchAmbientCamera()
+        .then(() => console.log("[reception] switch-camera applied, new facingMode:", this.ambientFacingMode))
+        .catch((err) => console.warn("[reception] switch-camera failed:", err));
     } else if (event.data.type === "wake-screen") {
       // Best-effort recovery for when Android/OEM battery optimization has
       // put the screen to sleep despite the JS-side keep-awake flag --
       // rejects harmlessly if the tablet's own Kiosk plugin isn't available
       // (e.g. running in a browser tab during development).
-      Kiosk.wake().catch((err) => console.warn("[reception] wake-screen failed:", err));
+      console.log("[reception] wake-screen received, calling Kiosk.wake()");
+      Kiosk.wake()
+        .then(() => console.log("[reception] Kiosk.wake() resolved"))
+        .catch((err) => console.warn("[reception] wake-screen failed:", err));
     }
   };
 
@@ -243,9 +253,19 @@ export class ReceptionRoom {
     // Defaults to "user" (front/selfie camera) so the tablet faces whoever
     // walks up to the desk; switchAmbientCamera() can flip it to
     // "environment" for a quick look around the room.
-    await this.call.updateInputSettings({
+    const result = await this.call.updateInputSettings({
       video: { settings: { width, height, frameRate, facingMode: this.ambientFacingMode } },
     });
+    // Confirms whether the requested facingMode actually landed -- some
+    // browsers/WebViews only honor certain constraints at initial track
+    // acquisition and silently ignore a later change (this bit us before
+    // with audio echoCancellation), so this checks rather than assumes.
+    console.log("[reception] applyAmbientQuality result:", JSON.stringify(result));
+    const liveVideoTrack = this.call.participants().local?.tracks?.video?.persistentTrack;
+    console.log(
+      "[reception] live video track settings after facingMode change:",
+      liveVideoTrack?.getSettings ? JSON.stringify(liveVideoTrack.getSettings()) : "no track",
+    );
   }
 
   private async applyTalkQuality(): Promise<void> {
