@@ -9,7 +9,8 @@ import { Kiosk } from "./kiosk";
 export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
 export type WakeScreenMessage = { type: "wake-screen" };
-type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeScreenMessage;
+export type SetUnattendedMessage = { type: "set-unattended"; value: boolean };
+type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeScreenMessage | SetUnattendedMessage;
 
 /**
  * Deterministic default ntfy.sh topic derived from the room URL, so any
@@ -34,7 +35,8 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     "type" in data &&
     ((data as { type: unknown }).type === "talk-request" ||
       (data as { type: unknown }).type === "talk-end" ||
-      (data as { type: unknown }).type === "wake-screen")
+      (data as { type: unknown }).type === "wake-screen" ||
+      (data as { type: unknown }).type === "set-unattended")
   );
 }
 
@@ -44,6 +46,10 @@ export class ReceptionRoom {
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
   private screenStatusTimer: ReturnType<typeof setInterval> | null = null;
+  // Mirrors App.tsx's persisted preference so a periodic screen-status
+  // broadcast can include it without App.tsx having to reach back in here
+  // on every change -- set once via setManualUnattended() instead.
+  private manualUnattended = false;
 
   constructor(
     private config: AppConfig,
@@ -51,7 +57,19 @@ export class ReceptionRoom {
     private onLocalVideoTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteAudioTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteVideoTrack?: (track: MediaStreamTrack | null) => void,
+    private onManualUnattendedChange?: (value: boolean) => void,
   ) {}
+
+  /**
+   * Sets the "manually marked unattended" flag, e.g. loaded from the
+   * device-local preference on launch, or toggled locally in the future.
+   * Immediately re-broadcasts so a connected viewer doesn't have to wait for
+   * the next periodic tick to see the change reflected.
+   */
+  setManualUnattended(value: boolean): void {
+    this.manualUnattended = value;
+    void this.broadcastScreenStatus();
+  }
 
   updateConfig(config: AppConfig) {
     this.config = config;
@@ -191,6 +209,14 @@ export class ReceptionRoom {
           setTimeout(() => void this.broadcastScreenStatus(), 500);
         })
         .catch((err) => console.warn("[reception] wake-screen failed:", err));
+    } else if (event.data.type === "set-unattended") {
+      // Only the admin (full-access) viewer can send this -- the read-only
+      // viewer role never wires up a control for it. Persisting is App.tsx's
+      // job (it owns localStorage access here); this just updates the value
+      // used for the next broadcast and notifies App.tsx to re-render/persist.
+      this.manualUnattended = event.data.value;
+      this.onManualUnattendedChange?.(event.data.value);
+      void this.broadcastScreenStatus();
     }
   };
 
@@ -198,7 +224,7 @@ export class ReceptionRoom {
     if (!this.call) return;
     try {
       const { on } = await Kiosk.isScreenOn();
-      this.call.sendAppMessage({ type: "screen-status", on }, "*");
+      this.call.sendAppMessage({ type: "screen-status", on, unattended: this.manualUnattended }, "*");
     } catch {
       // Kiosk plugin unavailable (e.g. running in a browser tab) -- nothing to report.
     }

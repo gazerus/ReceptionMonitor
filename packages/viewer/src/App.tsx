@@ -50,6 +50,7 @@ export default function App() {
   const [remoteAudioActive, setRemoteAudioActive] = useState(false);
   const [doorbellAlert, setDoorbellAlert] = useState(false);
   const [tabletScreenOn, setTabletScreenOn] = useState<boolean | null>(null);
+  const [tabletUnattended, setTabletUnattended] = useState<boolean | null>(null);
   const [micGain, setMicGain] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -147,7 +148,7 @@ export default function App() {
     const handleAppMessage = (event?: DailyEventObjectAppMessage) => {
       if (role !== "full") return;
       if (!event || typeof event.data !== "object" || event.data === null) return;
-      const data = event.data as { type?: unknown; on?: unknown };
+      const data = event.data as { type?: unknown; on?: unknown; unattended?: unknown };
 
       if (data.type === "doorbell") {
         setDoorbellAlert(true);
@@ -165,6 +166,7 @@ export default function App() {
         doorbellIntervalRef.current = setInterval(playDoorbellBeep, 2500);
       } else if (data.type === "screen-status" && typeof data.on === "boolean") {
         setTabletScreenOn(data.on);
+        if (typeof data.unattended === "boolean") setTabletUnattended(data.unattended);
       }
     };
 
@@ -185,6 +187,7 @@ export default function App() {
       void room.leave();
       setConnected(false);
       setTabletScreenOn(null);
+      setTabletUnattended(null);
       stopDoorbellAlert();
     };
   }, [role, config]);
@@ -375,6 +378,28 @@ export default function App() {
             }}
           >
             💡
+          </button>
+        )}
+        {role === "full" && (
+          <button
+            onClick={() => {
+              const next = !tabletUnattended;
+              setTabletUnattended(next);
+              roomRef.current?.setUnattended(next);
+            }}
+            title="Show/hide the 'currently unattended' banner on the tablet, on top of its normal scheduled hours"
+            style={{
+              padding: "14px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: tabletUnattended ? "#c62828" : "#1a1a1a",
+              color: "#eee",
+            }}
+          >
+            {tabletUnattended ? "Mark attended" : "Mark unattended"}
           </button>
         )}
       </div>

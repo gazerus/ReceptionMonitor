@@ -103,4 +103,9 @@ export class ViewerRoom {
   wakeScreen(): void {
     this.call?.sendAppMessage({ type: "wake-screen" }, "*");
   }
+
+  /** Admin-only: shows/hides the big "currently unattended" banner on the tablet, independently of (and in addition to) its normal scheduled hours. */
+  setUnattended(value: boolean): void {
+    this.call?.sendAppMessage({ type: "set-unattended", value }, "*");
+  }
 }

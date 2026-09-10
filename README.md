@@ -140,6 +140,20 @@ resolution — takes effect without rebuilding or redeploying either app. See
   when literally nobody saw the press. The ntfy push (if configured) still
   fires either way — that's precisely the mechanism for reaching someone
   who isn't currently connected.
+  Outside scheduled hours, or whenever the admin viewer has manually flagged
+  it, the small status pill is replaced with a large, high-contrast
+  **"Remote reception currently unattended"** banner — a walk-in visitor
+  looking at the tablet needs something obvious, not a small pill easy to
+  miss. The admin (full-access) viewer has a **"Mark unattended" / "Mark
+  attended"** toggle button next to the wake-screen button for flagging this
+  manually, independently of and in addition to the normal schedule (e.g.
+  stepped away for ten minutes during business hours) — sent as a
+  `set-unattended` app-message (`ViewerRoom.setUnattended()` /
+  `ReceptionRoom.handleAppMessage()` in the respective `daily.ts` files) and
+  persisted on the tablet (`reception/src/unattended.ts`, same
+  localStorage pattern as the kiosk-lock preference) so it survives a
+  reboot until explicitly toggled off. The read-only viewer (`4680`) has no
+  such control, same as everything else beyond the raw feed.
 - **Viewer**: fetches the same config, gates access with one of two shared
   codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
   grants full access, `4680` grants **view-only** access — just the raw

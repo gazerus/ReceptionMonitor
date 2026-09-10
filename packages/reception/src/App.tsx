@@ -4,6 +4,7 @@ import { ReceptionRoom } from "./daily";
 import { keepScreenAwake, watchAppResume } from "./wakeLock";
 import { applyScheduleOverride, saveScheduleOverride } from "./scheduleOverride";
 import { Kiosk, loadKioskPreference, saveKioskPreference } from "./kiosk";
+import { loadUnattendedPreference, saveUnattendedPreference } from "./unattended";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
@@ -40,6 +41,7 @@ export default function App() {
   const [doorbellState, setDoorbellState] = useState<"idle" | "rung" | "no-receptionist">("idle");
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
   const [kioskEnabled, setKioskEnabled] = useState(() => loadKioskPreference());
+  const [manualUnattended, setManualUnattended] = useState(() => loadUnattendedPreference());
   const tickNowRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -116,7 +118,15 @@ export default function App() {
             if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
           }
         },
+        (value) => {
+          setManualUnattended(value);
+          saveUnattendedPreference(value);
+        },
       );
+      // Reflects the preference loaded on launch into the room's broadcast
+      // state immediately, so a viewer connecting right away sees the
+      // correct value rather than the field's own false default.
+      roomRef.current.setManualUnattended(manualUnattended);
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
 
@@ -206,8 +216,12 @@ export default function App() {
         <GbcWordmark />
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <StatusPill status={status} />
+      <div style={{ marginTop: 12, padding: "0 24px" }}>
+        {status === "waiting" || manualUnattended ? (
+          <UnattendedBanner />
+        ) : (
+          <StatusPill status={status} />
+        )}
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -698,6 +712,33 @@ function DoorbellButton({
       <div style={{ fontSize: 22, fontWeight: 600, color: "#333", textAlign: "center", maxWidth: 340 }}>
         {label}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Replaces the small StatusPill whenever nobody's expected to be watching --
+ * either automatically outside scheduled hours, or because the admin viewer
+ * manually flagged it (e.g. stepped away during hours). Deliberately large
+ * and high-contrast: this is read by a visitor standing at the desk, not
+ * just a diagnostic for staff, so a small pill isn't obvious enough.
+ */
+function UnattendedBanner() {
+  return (
+    <div
+      style={{
+        padding: "16px 24px",
+        borderRadius: 14,
+        background: "#c62828",
+        color: "#fff",
+        fontWeight: 700,
+        fontSize: "clamp(22px, 4.5vw, 40px)",
+        lineHeight: 1.2,
+        textAlign: "center",
+        boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+      }}
+    >
+      Remote reception currently unattended
     </div>
   );
 }
