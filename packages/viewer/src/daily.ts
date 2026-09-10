@@ -108,4 +108,9 @@ export class ViewerRoom {
   setUnattended(value: boolean): void {
     this.call?.sendAppMessage({ type: "set-unattended", value }, "*");
   }
+
+  /** Admin-only: updates the tablet's monitoring hours remotely -- only reaches it while the tablet is actually joined to the room. */
+  setSchedule(start: string, end: string): void {
+    this.call?.sendAppMessage({ type: "set-schedule", start, end }, "*");
+  }
 }

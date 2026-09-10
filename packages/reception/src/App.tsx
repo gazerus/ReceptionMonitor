@@ -122,6 +122,7 @@ export default function App() {
           setManualUnattended(value);
           saveUnattendedPreference(value);
         },
+        (start, end) => saveSchedule(start, end),
       );
       // Reflects the preference loaded on launch into the room's broadcast
       // state immediately, so a viewer connecting right away sees the

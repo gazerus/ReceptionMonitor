@@ -154,6 +154,16 @@ resolution — takes effect without rebuilding or redeploying either app. See
   localStorage pattern as the kiosk-lock preference) so it survives a
   reboot until explicitly toggled off. The read-only viewer (`4680`) has no
   such control, same as everything else beyond the raw feed.
+  The admin viewer can also **edit the monitoring hours remotely** via a
+  "Hours: HH:MM–HH:MM" button next to it, which opens the same start/end
+  time fields as the tablet's own settings panel and sends them as a
+  `set-schedule` app-message (`ViewerRoom.setSchedule()`) — applied through
+  the exact same `saveScheduleOverride()` path as editing it directly on the
+  tablet, so it persists there the same way. This only works while the
+  tablet is actually joined to the room (the button reads "Hours: —" and is
+  disabled until the tablet's periodic status broadcast reports its current
+  hours) — outside scheduled hours the tablet leaves the room entirely, so
+  there's nothing to receive the message.
 - **Viewer**: fetches the same config, gates access with one of two shared
   codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
   grants full access, `4680` grants **view-only** access — just the raw

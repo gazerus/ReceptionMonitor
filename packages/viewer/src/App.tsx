@@ -51,6 +51,10 @@ export default function App() {
   const [doorbellAlert, setDoorbellAlert] = useState(false);
   const [tabletScreenOn, setTabletScreenOn] = useState<boolean | null>(null);
   const [tabletUnattended, setTabletUnattended] = useState<boolean | null>(null);
+  const [tabletSchedule, setTabletSchedule] = useState<{ start: string; end: string } | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [draftStart, setDraftStart] = useState("");
+  const [draftEnd, setDraftEnd] = useState("");
   const [micGain, setMicGain] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -148,7 +152,12 @@ export default function App() {
     const handleAppMessage = (event?: DailyEventObjectAppMessage) => {
       if (role !== "full") return;
       if (!event || typeof event.data !== "object" || event.data === null) return;
-      const data = event.data as { type?: unknown; on?: unknown; unattended?: unknown };
+      const data = event.data as {
+        type?: unknown;
+        on?: unknown;
+        unattended?: unknown;
+        schedule?: { start?: unknown; end?: unknown };
+      };
 
       if (data.type === "doorbell") {
         setDoorbellAlert(true);
@@ -167,6 +176,9 @@ export default function App() {
       } else if (data.type === "screen-status" && typeof data.on === "boolean") {
         setTabletScreenOn(data.on);
         if (typeof data.unattended === "boolean") setTabletUnattended(data.unattended);
+        if (typeof data.schedule?.start === "string" && typeof data.schedule?.end === "string") {
+          setTabletSchedule({ start: data.schedule.start, end: data.schedule.end });
+        }
       }
     };
 
@@ -188,6 +200,8 @@ export default function App() {
       setConnected(false);
       setTabletScreenOn(null);
       setTabletUnattended(null);
+      setTabletSchedule(null);
+      setEditingSchedule(false);
       stopDoorbellAlert();
     };
   }, [role, config]);
@@ -402,7 +416,97 @@ export default function App() {
             {tabletUnattended ? "Mark attended" : "Mark unattended"}
           </button>
         )}
+        {role === "full" && (
+          <button
+            onClick={() => {
+              if (!tabletSchedule) return;
+              setDraftStart(tabletSchedule.start);
+              setDraftEnd(tabletSchedule.end);
+              setEditingSchedule((prev) => !prev);
+            }}
+            disabled={!tabletSchedule}
+            title={
+              tabletSchedule
+                ? "Edit the tablet's monitoring hours"
+                : "Only available while the tablet is connected to the room"
+            }
+            style={{
+              padding: "14px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: tabletSchedule ? "pointer" : "not-allowed",
+              background: "#1a1a1a",
+              color: tabletSchedule ? "#eee" : "#666",
+            }}
+          >
+            {tabletSchedule ? `Hours: ${tabletSchedule.start}–${tabletSchedule.end}` : "Hours: —"}
+          </button>
+        )}
       </div>
+      {role === "full" && editingSchedule && tabletSchedule && (
+        <div
+          style={{
+            padding: "0 16px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
+        >
+          <label style={{ color: "#888", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            Start
+            <input
+              type="time"
+              value={draftStart}
+              onChange={(e) => setDraftStart(e.target.value)}
+              style={{ padding: 6, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
+            />
+          </label>
+          <label style={{ color: "#888", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            End
+            <input
+              type="time"
+              value={draftEnd}
+              onChange={(e) => setDraftEnd(e.target.value)}
+              style={{ padding: 6, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#eee" }}
+            />
+          </label>
+          <button
+            onClick={() => {
+              roomRef.current?.setSchedule(draftStart, draftEnd);
+              setTabletSchedule({ start: draftStart, end: draftEnd });
+              setEditingSchedule(false);
+            }}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "none",
+              background: "#2e7d32",
+              color: "#fff",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setEditingSchedule(false)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              background: "transparent",
+              color: "#ccc",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       {role === "full" && talking && (
         <div style={{ padding: "0 16px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ color: "#888", fontSize: 12, whiteSpace: "nowrap" }}>Mic level</span>

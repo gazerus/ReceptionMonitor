@@ -10,7 +10,8 @@ export type TalkRequestMessage = { type: "talk-request" };
 export type TalkEndMessage = { type: "talk-end" };
 export type WakeScreenMessage = { type: "wake-screen" };
 export type SetUnattendedMessage = { type: "set-unattended"; value: boolean };
-type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeScreenMessage | SetUnattendedMessage;
+export type SetScheduleMessage = { type: "set-schedule"; start: string; end: string };
+type SignalMessage = TalkRequestMessage | TalkEndMessage | WakeScreenMessage | SetUnattendedMessage | SetScheduleMessage;
 
 /**
  * Deterministic default ntfy.sh topic derived from the room URL, so any
@@ -36,7 +37,8 @@ function isSignalMessage(data: unknown): data is SignalMessage {
     ((data as { type: unknown }).type === "talk-request" ||
       (data as { type: unknown }).type === "talk-end" ||
       (data as { type: unknown }).type === "wake-screen" ||
-      (data as { type: unknown }).type === "set-unattended")
+      (data as { type: unknown }).type === "set-unattended" ||
+      (data as { type: unknown }).type === "set-schedule")
   );
 }
 
@@ -58,6 +60,7 @@ export class ReceptionRoom {
     private onRemoteAudioTrack?: (track: MediaStreamTrack | null) => void,
     private onRemoteVideoTrack?: (track: MediaStreamTrack | null) => void,
     private onManualUnattendedChange?: (value: boolean) => void,
+    private onRemoteScheduleChange?: (start: string, end: string) => void,
   ) {}
 
   /**
@@ -217,6 +220,14 @@ export class ReceptionRoom {
       this.manualUnattended = event.data.value;
       this.onManualUnattendedChange?.(event.data.value);
       void this.broadcastScreenStatus();
+    } else if (event.data.type === "set-schedule") {
+      // Only reachable while this tablet is actually joined to the room --
+      // outside scheduled hours it leaves entirely, so there's nothing to
+      // send this to. App.tsx owns persistence (scheduleOverride.ts) and
+      // immediate re-evaluation, exactly like the on-device PIN-protected
+      // schedule editor; this just plumbs the remote request through to it.
+      this.onRemoteScheduleChange?.(event.data.start, event.data.end);
+      void this.broadcastScreenStatus();
     }
   };
 
@@ -224,7 +235,15 @@ export class ReceptionRoom {
     if (!this.call) return;
     try {
       const { on } = await Kiosk.isScreenOn();
-      this.call.sendAppMessage({ type: "screen-status", on, unattended: this.manualUnattended }, "*");
+      this.call.sendAppMessage(
+        {
+          type: "screen-status",
+          on,
+          unattended: this.manualUnattended,
+          schedule: { start: this.config.schedule.start, end: this.config.schedule.end },
+        },
+        "*",
+      );
     } catch {
       // Kiosk plugin unavailable (e.g. running in a browser tab) -- nothing to report.
     }
