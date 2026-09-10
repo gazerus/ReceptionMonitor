@@ -130,6 +130,21 @@ resolution — takes effect without rebuilding or redeploying either app. See
   message — can recover from. A clean daily process restart, timed outside
   monitoring hours, sidesteps needing to chase down the exact leak. Change
   `RESTART_HOUR` in that file (and rebuild) if 6am doesn't suit.
+  There's also a **no-video watchdog** for a different failure mode: after
+  physically moving the tablet (likely a Wi-Fi handoff mid-move), the call
+  looked joined but produced no video at all, not even in the local
+  preview -- which doesn't touch the network, so a stuck local preview means
+  the whole camera/WebRTC pipeline needs a kick, not just the connection to
+  the viewer. `App.tsx` tracks actual rendered frames on the local preview
+  via `HTMLVideoElement.requestVideoFrameCallback()` (a real "is video
+  flowing" signal, unlike track state, which can look "live" while
+  delivering nothing) and, if none arrive for 10s while the app expects to
+  be live, first tries a plain leave+rejoin (cheap, often enough on its own
+  for a network blip); if that doesn't bring frames back within another
+  10s, it escalates to a full process restart (`Kiosk.restartApp()` in
+  `KioskPlugin.java`, reusing the exact same relaunch-then-kill mechanism
+  as the 6am restart above) on the theory that a JS thread stuck badly
+  enough can't be trusted to recover on its own either way.
   Additionally, the doorbell button checks whether anyone is actually
   connected to the room at the moment it's pressed (`hasConnectedViewer()`
   in `daily.ts`) — if nobody is, it shows a different, configurable message

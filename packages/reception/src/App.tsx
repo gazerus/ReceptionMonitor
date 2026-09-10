@@ -10,12 +10,35 @@ const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
 const SETTINGS_PIN = "45656";
+// How long the local camera preview can go without producing a frame before
+// it's treated as stuck rather than just briefly re-negotiating -- observed
+// in practice after a Wi-Fi handoff while physically moving the tablet: the
+// call looked joined but nothing was flowing, not even to the local preview
+// (which doesn't touch the network at all, so a stuck preview is a reliable
+// sign the whole pipeline needs a kick, not just the remote connection).
+const VIDEO_WATCHDOG_TIMEOUT_MS = 10_000;
+const VIDEO_WATCHDOG_CHECK_INTERVAL_MS = 2_000;
 // Fallback only -- config.default.json always ships one, this just covers a
 // stale cached config from before this field existed.
 const DEFAULT_NO_RECEPTIONIST_MESSAGE =
   "No receptionist is currently online. If you have a booking, please take a seat and someone will be with you before your scheduled time.";
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
+
+/**
+ * Repeatedly reports when the browser actually renders a new video frame
+ * for this element, rather than just when a track/stream is attached --
+ * srcObject can point at a live-looking track that's silently stopped
+ * delivering frames (the exact failure mode this watchdog exists for).
+ * Self-perpetuating: each callback re-arms itself for the next frame.
+ */
+function watchVideoFrames(video: HTMLVideoElement, onFrame: () => void): void {
+  const step = () => {
+    onFrame();
+    video.requestVideoFrameCallback(step);
+  };
+  video.requestVideoFrameCallback(step);
+}
 
 /** Splits a locale-formatted time into the numeric part and the am/pm marker, so the marker can render smaller. */
 function splitClock(date: Date): { time: string; period: string } {
@@ -43,6 +66,13 @@ export default function App() {
   const [kioskEnabled, setKioskEnabled] = useState(() => loadKioskPreference());
   const [manualUnattended, setManualUnattended] = useState(() => loadUnattendedPreference());
   const tickNowRef = useRef<() => void>(() => {});
+  const statusRef = useRef<Status>("loading");
+  const lastLocalFrameAtRef = useRef(Date.now());
+  const stallRecoveryStageRef = useRef<"none" | "rejoin-attempted">("none");
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     void keepScreenAwake();
@@ -52,6 +82,38 @@ export default function App() {
     let scheduleTimer: ReturnType<typeof setInterval>;
     let configTimer: ReturnType<typeof setInterval>;
     let clockTimer: ReturnType<typeof setInterval>;
+    let watchdogTimer: ReturnType<typeof setInterval>;
+
+    // Only acts while `status === "live"` (deliberately outside scheduled
+    // hours, or still starting up/erroring, is left alone). First tries a
+    // plain leave+rejoin, which re-acquires the camera and renegotiates the
+    // connection -- cheap and often enough on its own for a network blip.
+    // If that doesn't bring frames back either, escalates to a full process
+    // restart, since a genuinely stuck JS thread can't be trusted to
+    // recover on its own (the same failure mode the 6am scheduled restart
+    // exists for).
+    async function checkVideoWatchdog() {
+      if (statusRef.current !== "live") return;
+      const staleForMs = Date.now() - lastLocalFrameAtRef.current;
+      if (staleForMs < VIDEO_WATCHDOG_TIMEOUT_MS) return;
+
+      if (stallRecoveryStageRef.current === "none") {
+        stallRecoveryStageRef.current = "rejoin-attempted";
+        console.warn(`[watchdog] no local video frames for ${Math.round(staleForMs / 1000)}s -- rejoining`);
+        lastLocalFrameAtRef.current = Date.now();
+        try {
+          await roomRef.current?.leave();
+          await roomRef.current?.joinAmbient();
+        } catch (err) {
+          console.error("[watchdog] rejoin failed:", err);
+        }
+      } else {
+        console.warn("[watchdog] still no frames after rejoin -- restarting app");
+        stallRecoveryStageRef.current = "none";
+        lastLocalFrameAtRef.current = Date.now();
+        Kiosk.restartApp().catch((err) => console.warn("[watchdog] restartApp failed:", err));
+      }
+    }
 
     async function refreshConfig() {
       const config = await loadAppConfig(CONFIG_URL);
@@ -74,6 +136,12 @@ export default function App() {
         if (shouldBeLive && !room.isJoined) {
           await room.joinAmbient();
           setStatus("live");
+          // Gives the watchdog a fresh window from the moment of joining,
+          // rather than counting camera/negotiation startup time (which can
+          // itself take a few seconds) against the same 10s budget used to
+          // detect a genuinely stuck feed later on.
+          lastLocalFrameAtRef.current = Date.now();
+          stallRecoveryStageRef.current = "none";
         } else if (!shouldBeLive && room.isJoined) {
           await room.leave();
           setStatus("waiting");
@@ -97,6 +165,13 @@ export default function App() {
         (track) => {
           if (previewRef.current) {
             previewRef.current.srcObject = track ? new MediaStream([track]) : null;
+          }
+          if (track && previewRef.current) {
+            lastLocalFrameAtRef.current = Date.now();
+            watchVideoFrames(previewRef.current, () => {
+              lastLocalFrameAtRef.current = Date.now();
+              stallRecoveryStageRef.current = "none";
+            });
           }
         },
         (track) => {
@@ -134,6 +209,7 @@ export default function App() {
       scheduleTimer = setInterval(() => void tick(), SCHEDULE_CHECK_INTERVAL_MS);
       configTimer = setInterval(() => void refreshConfig(), CONFIG_REFRESH_INTERVAL_MS);
       clockTimer = setInterval(() => setNow(new Date()), 1000);
+      watchdogTimer = setInterval(() => void checkVideoWatchdog(), VIDEO_WATCHDOG_CHECK_INTERVAL_MS);
     })();
 
     return () => {
@@ -141,6 +217,7 @@ export default function App() {
       clearInterval(scheduleTimer);
       clearInterval(configTimer);
       clearInterval(clockTimer);
+      clearInterval(watchdogTimer);
       void roomRef.current?.leave();
     };
   }, []);

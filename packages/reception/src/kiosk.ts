@@ -18,6 +18,8 @@ export interface KioskPlugin {
   isDefaultHome(): Promise<{ isDefault: boolean }>;
   /** Deep link to Android's "Default apps -> Home app" picker. */
   openHomeSettings(): Promise<void>;
+  /** Immediately restarts the app process -- used by the no-video watchdog when a plain rejoin doesn't bring the camera preview back. */
+  restartApp(): Promise<void>;
 }
 
 // No web implementation: kiosk lock is an Android-only, native-only feature.

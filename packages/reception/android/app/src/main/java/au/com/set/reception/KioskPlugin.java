@@ -208,6 +208,27 @@ public class KioskPlugin extends Plugin {
         }
     }
 
+    /**
+     * Immediately restarts the app process. Called by the JS-side watchdog
+     * when the local camera preview has produced no video frames for too
+     * long (observed in practice after a Wi-Fi handoff while physically
+     * moving the tablet -- the call looked joined but produced no frames,
+     * even in the local preview, which doesn't touch the network at all).
+     * Reuses the exact same relaunch-then-kill mechanism as the daily
+     * scheduled restart, since a stuck JS thread can't be trusted to
+     * recover on its own.
+     */
+    @PluginMethod
+    public void restartApp(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        call.resolve();
+        ScheduledRestartReceiver.restartNow(activity);
+    }
+
     /** Best-effort deep link into Android's security settings, in case screen pinning has been disabled by a device policy. */
     @PluginMethod
     public void openSecuritySettings(PluginCall call) {

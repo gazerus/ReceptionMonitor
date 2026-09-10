@@ -26,7 +26,16 @@ public class ScheduledRestartReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         scheduleNext(context);
+        restartNow(context);
+    }
 
+    /**
+     * Relaunches MainActivity and kills this process shortly after -- the
+     * same recovery used for the daily scheduled restart, also called
+     * on-demand by KioskPlugin.restartApp() for the JS-side "no video frames
+     * in N seconds" watchdog, since a frozen JS thread can't recover itself.
+     */
+    static void restartNow(Context context) {
         Intent launch = new Intent(context, MainActivity.class);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         context.startActivity(launch);
