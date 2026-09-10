@@ -45,9 +45,16 @@ function isSignalMessage(data: unknown): data is SignalMessage {
 const SCREEN_STATUS_INTERVAL_MS = 5000;
 
 export class ReceptionRoom {
+  private static readonly NTFY_REPEAT_INTERVAL_MS = 30_000;
+  // ~3 minutes of repeats (including the first push) before giving up --
+  // there's no way to know if the phone push was ever actually seen, so
+  // this is the honest stand-in for "stop eventually" either way.
+  private static readonly NTFY_REPEAT_MAX_ATTEMPTS = 6;
+
   private call: DailyCall | null = null;
   private talkSessionTimer: ReturnType<typeof setTimeout> | null = null;
   private screenStatusTimer: ReturnType<typeof setInterval> | null = null;
+  private ntfyRepeatTimer: ReturnType<typeof setTimeout> | null = null;
   // Mirrors App.tsx's persisted preference so a periodic screen-status
   // broadcast can include it without App.tsx having to reach back in here
   // on every change -- set once via setManualUnattended() instead.
@@ -173,6 +180,7 @@ export class ReceptionRoom {
   async leave(): Promise<void> {
     if (!this.call) return;
     this.clearTalkTimeout();
+    this.clearNtfyRepeat();
     if (this.screenStatusTimer) {
       clearInterval(this.screenStatusTimer);
       this.screenStatusTimer = null;
@@ -371,7 +379,34 @@ export class ReceptionRoom {
    */
   ringDoorbell(): void {
     this.call?.sendAppMessage({ type: "doorbell" }, "*");
-    void this.sendNtfyPush();
+    this.clearNtfyRepeat();
+    void this.sendNtfyPushRepeating(1);
+  }
+
+  /**
+   * Keeps re-sending the ntfy push every 30s (each a distinct message, so
+   * each one alerts again) until either someone actually joins the room --
+   * at which point the in-page repeating beep + Acknowledge button take
+   * over and further phone pushes would just be redundant -- or a fixed cap
+   * is hit. There's no way to know if the *phone* push was ever seen (no
+   * server of our own to receive an acknowledgement from it), so the cap is
+   * the honest stand-in for "give up eventually" rather than pushing
+   * forever if genuinely nobody responds either way.
+   */
+  private async sendNtfyPushRepeating(attempt: number): Promise<void> {
+    await this.sendNtfyPush();
+    if (attempt >= ReceptionRoom.NTFY_REPEAT_MAX_ATTEMPTS) return;
+    this.ntfyRepeatTimer = setTimeout(() => {
+      if (this.hasConnectedViewer()) return;
+      void this.sendNtfyPushRepeating(attempt + 1);
+    }, ReceptionRoom.NTFY_REPEAT_INTERVAL_MS);
+  }
+
+  private clearNtfyRepeat(): void {
+    if (this.ntfyRepeatTimer) {
+      clearTimeout(this.ntfyRepeatTimer);
+      this.ntfyRepeatTimer = null;
+    }
   }
 
   private async sendNtfyPush(): Promise<void> {

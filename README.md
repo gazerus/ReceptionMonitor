@@ -372,6 +372,17 @@ That's it — pressing the doorbell now reaches you either way, in-page if
 the viewer's open, as a push notification if it isn't. Tapping the push
 notification opens the viewer page directly (`doorbellPush.clickUrl`).
 
+**The push repeats, not just a single alert**: like the in-page beep, a
+single ntfy push was too easy to miss if a phone isn't being looked at that
+exact moment. `ringDoorbell()` re-sends a fresh push every 30 seconds (each
+one is a distinct message, so each one alerts again) for up to 6 attempts
+(~3 minutes), stopping early the moment someone actually joins the viewer
+room — at that point the in-page repeating beep and Acknowledge button take
+over, so continuing separate phone pushes would just be redundant. There's
+no way to know if a phone push was ever actually seen (no server of our own
+to receive an acknowledgement from it), so the ~3 minute cap is the honest
+stand-in for "stop eventually" if genuinely nobody responds either way.
+
 **Worth knowing:**
 - The topic (derived or explicit) is effectively a shared secret, not a
   public identifier — anyone who learns it could publish fake doorbell
