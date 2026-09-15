@@ -22,6 +22,8 @@ const VIDEO_WATCHDOG_CHECK_INTERVAL_MS = 2_000;
 // stale cached config from before this field existed.
 const DEFAULT_NO_RECEPTIONIST_MESSAGE =
   "No receptionist is currently online. If you have a booking, please take a seat and someone will be with you before your scheduled time.";
+const DEFAULT_CLOSED_MESSAGE =
+  "Reception is currently closed. We'll be notified you're here and will follow up when we're next open.";
 
 type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
 
@@ -61,7 +63,7 @@ export default function App() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [showRemoteVideo, setShowRemoteVideo] = useState(false);
-  const [doorbellState, setDoorbellState] = useState<"idle" | "rung" | "no-receptionist">("idle");
+  const [doorbellState, setDoorbellState] = useState<"idle" | "rung" | "no-receptionist" | "closed">("idle");
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
   const [kioskEnabled, setKioskEnabled] = useState(() => loadKioskPreference());
   const [manualUnattended, setManualUnattended] = useState(() => loadUnattendedPreference());
@@ -247,11 +249,23 @@ export default function App() {
 
   const pressDoorbell = () => {
     if (doorbellState !== "idle") return;
-    const hasViewer = roomRef.current?.hasConnectedViewer() ?? false;
-    // Still rings regardless -- the ntfy push (if configured) is exactly
-    // the mechanism for reaching someone who isn't currently connected, so
-    // this only changes what the visitor sees on the tablet itself.
+    // Still rings regardless of any of the states below -- the ntfy push
+    // (if configured) is exactly the mechanism for reaching someone who
+    // isn't currently connected (or isn't expected to be, outside
+    // scheduled hours), so this only changes what the visitor sees on the
+    // tablet itself.
     roomRef.current?.ringDoorbell();
+    if (status === "waiting") {
+      // Entirely outside scheduled hours/days (e.g. a weekend) -- distinct
+      // from "nobody happens to be watching right now" during otherwise-
+      // open hours. Showing "someone will be with you shortly" or the
+      // no-receptionist message here would be actively misleading, since
+      // reception isn't even scheduled to be open today.
+      setDoorbellState("closed");
+      setTimeout(() => setDoorbellState("idle"), 20_000);
+      return;
+    }
+    const hasViewer = roomRef.current?.hasConnectedViewer() ?? false;
     if (hasViewer) {
       setDoorbellState("rung");
       setTimeout(() => setDoorbellState("idle"), 4000);
@@ -307,6 +321,7 @@ export default function App() {
           state={doorbellState}
           onPress={pressDoorbell}
           noReceptionistMessage={configRef.current?.noReceptionistMessage ?? DEFAULT_NO_RECEPTIONIST_MESSAGE}
+          closedMessage={configRef.current?.closedMessage ?? DEFAULT_CLOSED_MESSAGE}
         />
       </div>
 
@@ -751,10 +766,12 @@ function DoorbellButton({
   state,
   onPress,
   noReceptionistMessage,
+  closedMessage,
 }: {
-  state: "idle" | "rung" | "no-receptionist";
+  state: "idle" | "rung" | "no-receptionist" | "closed";
   onPress: () => void;
   noReceptionistMessage: string;
+  closedMessage: string;
 }) {
   const idle = state === "idle";
   const label =
@@ -762,9 +779,12 @@ function DoorbellButton({
       ? "Press for Assistance"
       : state === "rung"
         ? "Someone will be with you shortly"
-        : noReceptionistMessage;
-  const icon = state === "idle" ? "🔔" : state === "rung" ? "✅" : "ℹ️";
-  const background = state === "idle" ? "#00c3e3" : state === "rung" ? "#2e7d32" : "#e65100";
+        : state === "closed"
+          ? closedMessage
+          : noReceptionistMessage;
+  const icon = state === "idle" ? "🔔" : state === "rung" ? "✅" : state === "closed" ? "🕒" : "ℹ️";
+  const background =
+    state === "idle" ? "#00c3e3" : state === "rung" ? "#2e7d32" : state === "closed" ? "#616161" : "#e65100";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>

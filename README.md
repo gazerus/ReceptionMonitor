@@ -155,6 +155,16 @@ resolution — takes effect without rebuilding or redeploying either app. See
   when literally nobody saw the press. The ntfy push (if configured) still
   fires either way — that's precisely the mechanism for reaching someone
   who isn't currently connected.
+  There's a third, distinct message for when the doorbell is pressed
+  entirely outside scheduled hours/days (e.g. a weekend) —
+  `closedMessage` in the config, default: "Reception is currently closed.
+  We'll be notified you're here and will follow up when we're next open."
+  — since "reception is closed today" is different information from
+  "nobody happens to be watching right now", even though both leave a
+  visitor without an immediate response. The ntfy push still fires in this
+  case too, exactly as it did before this existed (that's how a doorbell
+  press on a weekend reached a phone at all, which was previously
+  mistaken for the app incorrectly still being "live").
   Outside scheduled hours, or whenever the admin viewer has manually flagged
   it, the small status pill is replaced with a large, high-contrast
   **"Remote reception currently unattended"** banner — a walk-in visitor

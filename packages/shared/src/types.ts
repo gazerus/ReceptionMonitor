@@ -67,4 +67,14 @@ export interface AppConfig {
    * actually saw the press.
    */
   noReceptionistMessage?: string;
+  /**
+   * Shown on the tablet when the doorbell is pressed entirely outside
+   * scheduled hours/days (e.g. a weekend) -- distinct from
+   * noReceptionistMessage, since "reception is closed today" is different
+   * information from "nobody happens to be watching right now" even though
+   * both leave a visitor without an immediate response. The doorbell still
+   * fires its ntfy push either way, in case whoever gets it wants to
+   * respond anyway.
+   */
+  closedMessage?: string;
 }
