@@ -34,6 +34,14 @@ function writeCache(config: AppConfig): void {
   }
 }
 
+function clearCache(): void {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // best-effort only
+  }
+}
+
 /**
  * Loads app config (room, schedule, video quality) from a
  * hosted JSON file so hours/staff can be changed by editing that file,
@@ -43,7 +51,17 @@ function writeCache(config: AppConfig): void {
  */
 export async function loadAppConfig(configUrl?: string): Promise<AppConfig> {
   if (!configUrl) {
-    return readCache() ?? (defaultConfig as AppConfig);
+    // No remote configured, so there's nothing for a cached copy to be a
+    // fallback *for* -- don't let a stale cache (e.g. left over from an
+    // earlier build that did have a configUrl, or from testing one) go on
+    // silently shadowing the currently-bundled default forever. This is a
+    // real bug that bit us: config.default.json's schedule.daysOfWeek
+    // (added on day one to exclude weekends) wasn't taking effect because
+    // an old cached config without that field was winning over the
+    // up-to-date bundled default on every load, indefinitely, immune to
+    // rebuilds.
+    clearCache();
+    return defaultConfig as AppConfig;
   }
 
   try {
