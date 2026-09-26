@@ -165,6 +165,29 @@ resolution — takes effect without rebuilding or redeploying either app. See
   case too, exactly as it did before this existed (that's how a doorbell
   press on a weekend reached a phone at all, which was previously
   mistaken for the app incorrectly still being "live").
+  The admin viewer can also **force the tablet online outside its normal
+  schedule** entirely — a "Wake reception" button next to the Hours/
+  unattended controls, for exactly the "someone rang on a closed day"
+  case above. This reuses the same ntfy.sh deployment as the doorbell push
+  but on a *separate* topic (`doorbellPush.wakeTopic`, derived from the
+  room URL the same way the doorbell topic is, just with a different
+  derivation so the two — opposite-direction — channels never collide):
+  the tablet keeps a lightweight, always-open Server-Sent-Events
+  connection to that topic (`reception/src/overrideWake.ts`, `EventSource`
+  against `<ntfyBaseUrl>/<wakeTopic>/sse`) and, on receiving a message,
+  forces itself live for `overrideWakeMinutes` (default 15) regardless of
+  the real schedule, then automatically reverts on the next 30s schedule
+  tick if still genuinely outside hours. The viewer side is just a plain
+  HTTP POST to the same topic (`viewer/src/overrideWake.ts`,
+  `sendOverrideWake()`) — no Daily/WebRTC involvement on either end. This
+  is deliberately *not* the same approach as keeping the tablet connected
+  to the Daily room 24/7 (tried once early on, reverted — see git history
+  around "out-of-hours Check in") — that cost roughly 3x the Daily
+  participant-minutes for a feature used rarely if at all; an SSE
+  connection carries no such per-minute billing, so it can stay open
+  continuously for free. Admin-only (`role === "full"`), since each use
+  has a real resource cost (an actual Daily join) even though listening
+  for it doesn't.
   Outside scheduled hours, or whenever the admin viewer has manually flagged
   it, the small status pill is replaced with a large, high-contrast
   **"Remote reception currently unattended"** banner — a walk-in visitor

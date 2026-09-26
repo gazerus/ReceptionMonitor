@@ -46,6 +46,14 @@ export interface DoorbellPushConfig {
   ntfyBaseUrl?: string;
   /** Opened when the push notification itself is tapped -- typically the viewer page. */
   clickUrl?: string;
+  /**
+   * ntfy.sh topic the tablet listens on (via Server-Sent Events) for an
+   * admin viewer's "override wake" request -- forces the tablet online
+   * outside its normal schedule. Optional -- if omitted, derived from
+   * `room.roomUrl` the same way `ntfyTopic` is, just with a different
+   * derivation so the two (opposite-direction) channels never collide.
+   */
+  wakeTopic?: string;
 }
 
 export interface AppConfig {
@@ -77,4 +85,11 @@ export interface AppConfig {
    * respond anyway.
    */
   closedMessage?: string;
+  /**
+   * Minutes the ambient connection stays up after an admin viewer's
+   * "override wake" request (via doorbellPush.wakeTopic) before
+   * automatically reverting to the real schedule, if still outside it.
+   * Only relevant when doorbellPush is configured. Defaults to 15.
+   */
+  overrideWakeMinutes?: number;
 }

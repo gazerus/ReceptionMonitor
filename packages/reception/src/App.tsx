@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { loadAppConfig, isWithinScheduleWindow, type AppConfig, type ScheduleConfig } from "@reception/shared";
+import { loadAppConfig, isWithinScheduleWindow, deriveWakeTopic, type AppConfig, type ScheduleConfig } from "@reception/shared";
 import { ReceptionRoom } from "./daily";
 import { keepScreenAwake, watchAppResume } from "./wakeLock";
 import { applyScheduleOverride, saveScheduleOverride } from "./scheduleOverride";
 import { Kiosk, loadKioskPreference, saveKioskPreference } from "./kiosk";
 import { loadUnattendedPreference, saveUnattendedPreference } from "./unattended";
+import { listenForOverrideWake } from "./overrideWake";
+
+const DEFAULT_OVERRIDE_WAKE_MINUTES = 15;
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
@@ -71,6 +74,7 @@ export default function App() {
   const statusRef = useRef<Status>("loading");
   const lastLocalFrameAtRef = useRef(Date.now());
   const stallRecoveryStageRef = useRef<"none" | "rejoin-attempted">("none");
+  const overrideUntilRef = useRef(0);
 
   useEffect(() => {
     statusRef.current = status;
@@ -85,6 +89,7 @@ export default function App() {
     let configTimer: ReturnType<typeof setInterval>;
     let clockTimer: ReturnType<typeof setInterval>;
     let watchdogTimer: ReturnType<typeof setInterval>;
+    let unlistenOverrideWake: (() => void) | null = null;
 
     // Only acts while `status === "live"` (deliberately outside scheduled
     // hours, or still starting up/erroring, is left alone). First tries a
@@ -130,7 +135,8 @@ export default function App() {
       const config = configRef.current;
       if (!config) return;
 
-      const shouldBeLive = isWithinScheduleWindow(config.schedule);
+      const shouldBeLive =
+        isWithinScheduleWindow(config.schedule) || Date.now() < overrideUntilRef.current;
       const room = roomRef.current;
       if (!room) return;
 
@@ -208,6 +214,25 @@ export default function App() {
       setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
       await tick();
 
+      // Lets an admin viewer force the tablet online outside its normal
+      // schedule (e.g. someone rings the doorbell on a closed day) without
+      // keeping it connected to the Daily room 24/7 just to make that
+      // reachable -- this SSE connection is a plain long-lived HTTP request,
+      // not a Daily/WebRTC session, so it carries no participant-minutes
+      // cost to leave open continuously. Opt-in: only listens if doorbellPush
+      // is configured, since that's the same ntfy deployment this reuses.
+      const push = configRef.current.doorbellPush;
+      if (push) {
+        const topic = push.wakeTopic ?? (await deriveWakeTopic(configRef.current.room.roomUrl));
+        const baseUrl = push.ntfyBaseUrl ?? "https://ntfy.sh";
+        unlistenOverrideWake = listenForOverrideWake(`${baseUrl}/${topic}`, () => {
+          const minutes = configRef.current?.overrideWakeMinutes ?? DEFAULT_OVERRIDE_WAKE_MINUTES;
+          overrideUntilRef.current = Date.now() + minutes * 60_000;
+          console.log(`[override-wake] request received -- forcing live for ${minutes} minute(s)`);
+          void tick();
+        });
+      }
+
       scheduleTimer = setInterval(() => void tick(), SCHEDULE_CHECK_INTERVAL_MS);
       configTimer = setInterval(() => void refreshConfig(), CONFIG_REFRESH_INTERVAL_MS);
       clockTimer = setInterval(() => setNow(new Date()), 1000);
@@ -220,6 +245,7 @@ export default function App() {
       clearInterval(configTimer);
       clearInterval(clockTimer);
       clearInterval(watchdogTimer);
+      unlistenOverrideWake?.();
       void roomRef.current?.leave();
     };
   }, []);

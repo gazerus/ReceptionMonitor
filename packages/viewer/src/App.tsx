@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DailyEventObjectAppMessage, DailyEventObjectTrack } from "@daily-co/daily-js";
 import { loadAppConfig, type AppConfig } from "@reception/shared";
 import { ViewerRoom } from "./daily";
+import { sendOverrideWake } from "./overrideWake";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SESSION_KEY = "reception-viewer-role";
@@ -53,6 +54,7 @@ export default function App() {
   const [tabletUnattended, setTabletUnattended] = useState<boolean | null>(null);
   const [tabletSchedule, setTabletSchedule] = useState<{ start: string; end: string } | null>(null);
   const [editingSchedule, setEditingSchedule] = useState(false);
+  const [wakeState, setWakeState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [draftStart, setDraftStart] = useState("");
   const [draftEnd, setDraftEnd] = useState("");
   const [micGain, setMicGain] = useState(1);
@@ -268,6 +270,20 @@ export default function App() {
     }
   };
 
+  const handleOverrideWake = async () => {
+    if (wakeState === "sending") return;
+    setWakeState("sending");
+    try {
+      await sendOverrideWake(config);
+      setWakeState("sent");
+    } catch (err) {
+      console.warn("[viewer] override wake failed:", err);
+      setWakeState("error");
+    } finally {
+      setTimeout(() => setWakeState("idle"), 4000);
+    }
+  };
+
   return (
     <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", background: "#111" }}>
       {doorbellAlert && (
@@ -442,6 +458,32 @@ export default function App() {
             }}
           >
             {tabletSchedule ? `Hours: ${tabletSchedule.start}–${tabletSchedule.end}` : "Hours: —"}
+          </button>
+        )}
+        {role === "full" && (
+          <button
+            onClick={() => void handleOverrideWake()}
+            disabled={wakeState === "sending"}
+            title="Forces the tablet online outside its normal hours -- e.g. someone's at the door on a closed day"
+            style={{
+              padding: "14px 16px",
+              borderRadius: 999,
+              border: "1px solid #444",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: wakeState === "sending" ? "default" : "pointer",
+              background:
+                wakeState === "sent" ? "#2e7d32" : wakeState === "error" ? "#c62828" : "#1a1a1a",
+              color: "#eee",
+            }}
+          >
+            {wakeState === "sending"
+              ? "Waking…"
+              : wakeState === "sent"
+                ? "Sent ✓"
+                : wakeState === "error"
+                  ? "Failed"
+                  : "Wake reception"}
           </button>
         )}
       </div>
