@@ -23,7 +23,7 @@ const IDLE_LEAVE_MS = 60_000;
 // scheduled hours for this long, so whoever gets the push can look in.
 const DOORBELL_WATCH_WINDOW_MS = 10 * 60_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
-const SETTINGS_PIN = "45656";
+const SETTINGS_PIN = "11111";
 // How long the local camera preview can go without producing a frame before
 // it's treated as stuck rather than just briefly re-negotiating -- observed
 // in practice after a Wi-Fi handoff while physically moving the tablet: the

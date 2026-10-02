@@ -75,7 +75,7 @@ Some of the "always-on ambient stream" wording below predates this change.
   reaches your phone if the viewer page is closed or minimized — see
   "Doorbell push notifications" below for setup. No server of our own
   either way; ntfy.sh is a free hosted relay. Also has
-  a small PIN-protected settings button (bottom-left, code `45656`) for
+  a small PIN-protected settings button (bottom-left, code `11111`) for
   editing the schedule's start/end times directly on the tablet — stored in
   that device's local storage (`scheduleOverride.ts`), so it survives app
   restarts without needing a rebuild or a hosted config. Keeps the screen
@@ -444,7 +444,7 @@ stand-in for "stop eventually" if genuinely nobody responds either way.
   is just a hash of the (already-public, in this repo) room URL, it's no
   more or less exposed than the repo itself already is — consistent with
   this project's existing "good enough for an internal tool" security
-  posture elsewhere (the shared `45656` code used by both the tablet
+  posture elsewhere (the shared `11111` code used by both the tablet
   settings and the viewer login).
 - This depends on ntfy.sh's free public service staying up — reasonable for
   an internal tool like this, but not a guaranteed-delivery SLA. If that
