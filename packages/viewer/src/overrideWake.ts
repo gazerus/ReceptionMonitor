@@ -1,16 +1,29 @@
 import { deriveWakeTopic, type AppConfig } from "@reception/shared";
 
 /**
- * Admin-only: forces the tablet online outside its normal schedule (e.g.
- * someone rings the doorbell on a closed day), via the same lightweight
- * ntfy.sh channel the tablet listens to continuously (see
- * reception/src/overrideWake.ts) -- no Daily/WebRTC connection involved on
- * this side either, just a plain HTTP POST like the doorbell push itself.
+ * Posts to the ntfy.sh topic the tablet listens on (see
+ * reception/src/overrideWake.ts) -- a plain HTTP POST, no Daily involvement.
  */
-export async function sendOverrideWake(config: AppConfig): Promise<void> {
+async function postToWakeTopic(config: AppConfig, body: "watch" | "wake"): Promise<void> {
   const push = config.doorbellPush;
-  if (!push) throw new Error("doorbellPush isn't configured -- override wake has no channel to use.");
+  if (!push) throw new Error("doorbellPush isn't configured -- the tablet has no wake channel to listen on.");
   const topic = push.wakeTopic ?? (await deriveWakeTopic(config.room.roomUrl));
   const baseUrl = push.ntfyBaseUrl ?? "https://ntfy.sh";
-  await fetch(`${baseUrl}/${topic}`, { method: "POST", body: "wake" });
+  const res = await fetch(`${baseUrl}/${topic}`, { method: "POST", body });
+  if (!res.ok) throw new Error(`ntfy POST failed: ${res.status}`);
+}
+
+/**
+ * Asks the tablet to join the Daily room because this viewer wants the
+ * feed. The tablet sits outside the room (unbilled) until it receives one of
+ * these, and leaves again once no viewer is connected. Honoured inside
+ * scheduled hours, within an admin override, or shortly after a doorbell press.
+ */
+export function sendWatch(config: AppConfig): Promise<void> {
+  return postToWakeTopic(config, "watch");
+}
+
+/** Admin-only: brings the tablet online even outside its normal schedule. */
+export function sendOverrideWake(config: AppConfig): Promise<void> {
+  return postToWakeTopic(config, "wake");
 }

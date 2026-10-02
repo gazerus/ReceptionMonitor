@@ -10,7 +10,18 @@ import { listenForOverrideWake } from "./overrideWake";
 const DEFAULT_OVERRIDE_WAKE_MINUTES = 15;
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
-const SCHEDULE_CHECK_INTERVAL_MS = 30_000;
+// Short, because this loop now also decides when to drop out of the Daily
+// room once nobody's watching -- every idle minute in the room is billed.
+const SCHEDULE_CHECK_INTERVAL_MS = 5_000;
+// On-demand connection: the tablet only joins the Daily room when a viewer
+// asks for the feed (ntfy "watch"/"wake"), and leaves once no viewer has
+// been connected for IDLE_LEAVE_MS. JOIN_GRACE_MS is how long it waits after
+// a request for the viewer to actually show up before giving up.
+const JOIN_GRACE_MS = 90_000;
+const IDLE_LEAVE_MS = 60_000;
+// After a doorbell press, viewer "watch" requests are honoured even outside
+// scheduled hours for this long, so whoever gets the push can look in.
+const DOORBELL_WATCH_WINDOW_MS = 10 * 60_000;
 const CONFIG_REFRESH_INTERVAL_MS = 5 * 60_000;
 const SETTINGS_PIN = "45656";
 // How long the local camera preview can go without producing a frame before
@@ -28,7 +39,9 @@ const DEFAULT_NO_RECEPTIONIST_MESSAGE =
 const DEFAULT_CLOSED_MESSAGE =
   "Reception is currently closed. We'll be notified you're here and will follow up when we're next open.";
 
-type Status = "loading" | "waiting" | "live" | "error" | "no-camera";
+// "standby" = inside scheduled hours but not connected to Daily (nobody is
+// watching) -- the app is up, the doorbell works, but nothing is billed.
+type Status = "loading" | "waiting" | "standby" | "live" | "error" | "no-camera";
 
 /**
  * Repeatedly reports when the browser actually renders a new video frame
@@ -75,6 +88,9 @@ export default function App() {
   const lastLocalFrameAtRef = useRef(Date.now());
   const stallRecoveryStageRef = useRef<"none" | "rejoin-attempted">("none");
   const overrideUntilRef = useRef(0);
+  const demandUntilRef = useRef(0);
+  const lastViewerAtRef = useRef(0);
+  const doorbellUntilRef = useRef(0);
 
   useEffect(() => {
     statusRef.current = status;
@@ -134,11 +150,18 @@ export default function App() {
     async function tick() {
       const config = configRef.current;
       if (!config) return;
-
-      const shouldBeLive =
-        isWithinScheduleWindow(config.schedule) || Date.now() < overrideUntilRef.current;
       const room = roomRef.current;
       if (!room) return;
+
+      const now = Date.now();
+      const inHours = isWithinScheduleWindow(config.schedule) || now < overrideUntilRef.current;
+      if (room.isJoined && room.hasConnectedViewer()) lastViewerAtRef.current = now;
+
+      // Only in the room while someone actually wants the feed: a recent
+      // watch/wake request, or a viewer connected within IDLE_LEAVE_MS.
+      // Scheduled hours alone no longer keep it connected.
+      const shouldBeLive =
+        now < demandUntilRef.current || (room.isJoined && now - lastViewerAtRef.current < IDLE_LEAVE_MS);
 
       try {
         if (shouldBeLive && !room.isJoined) {
@@ -151,8 +174,11 @@ export default function App() {
           lastLocalFrameAtRef.current = Date.now();
           stallRecoveryStageRef.current = "none";
         } else if (!shouldBeLive && room.isJoined) {
+          console.log("[on-demand] no viewer connected -- leaving room to stop Daily billing");
           await room.leave();
-          setStatus("waiting");
+          setStatus(inHours ? "standby" : "waiting");
+        } else if (!room.isJoined) {
+          setStatus((prev) => (prev === "no-camera" ? prev : inHours ? "standby" : "waiting"));
         }
       } catch (err) {
         console.error("[schedule] join/leave failed:", err);
@@ -211,7 +237,7 @@ export default function App() {
       // state immediately, so a viewer connecting right away sees the
       // correct value rather than the field's own false default.
       roomRef.current.setManualUnattended(manualUnattended);
-      setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "loading" : "waiting");
+      setStatus(isWithinScheduleWindow(configRef.current.schedule) ? "standby" : "waiting");
       await tick();
 
       // Lets an admin viewer force the tablet online outside its normal
@@ -225,10 +251,28 @@ export default function App() {
       if (push) {
         const topic = push.wakeTopic ?? (await deriveWakeTopic(configRef.current.room.roomUrl));
         const baseUrl = push.ntfyBaseUrl ?? "https://ntfy.sh";
-        unlistenOverrideWake = listenForOverrideWake(`${baseUrl}/${topic}`, () => {
-          const minutes = configRef.current?.overrideWakeMinutes ?? DEFAULT_OVERRIDE_WAKE_MINUTES;
-          overrideUntilRef.current = Date.now() + minutes * 60_000;
-          console.log(`[override-wake] request received -- forcing live for ${minutes} minute(s)`);
+        unlistenOverrideWake = listenForOverrideWake(`${baseUrl}/${topic}`, (kind) => {
+          const config = configRef.current;
+          if (!config) return;
+          const now = Date.now();
+          if (kind === "wake") {
+            // Admin override: allow the feed outside scheduled hours for a
+            // while, and connect now.
+            const minutes = config.overrideWakeMinutes ?? DEFAULT_OVERRIDE_WAKE_MINUTES;
+            overrideUntilRef.current = now + minutes * 60_000;
+            console.log(`[override-wake] admin wake -- feed allowed for ${minutes} minute(s)`);
+          } else {
+            const allowed =
+              isWithinScheduleWindow(config.schedule) ||
+              now < overrideUntilRef.current ||
+              now < doorbellUntilRef.current;
+            if (!allowed) {
+              console.log("[on-demand] watch request ignored -- outside scheduled hours");
+              return;
+            }
+            console.log("[on-demand] watch request -- joining room");
+          }
+          demandUntilRef.current = now + JOIN_GRACE_MS;
           void tick();
         });
       }
@@ -281,6 +325,7 @@ export default function App() {
     // scheduled hours), so this only changes what the visitor sees on the
     // tablet itself.
     roomRef.current?.ringDoorbell();
+    doorbellUntilRef.current = Date.now() + DOORBELL_WATCH_WINDOW_MS;
     if (status === "waiting") {
       // Entirely outside scheduled hours/days (e.g. a weekend) -- distinct
       // from "nobody happens to be watching right now" during otherwise-
@@ -871,6 +916,7 @@ function StatusPill({ status }: { status: Status }) {
   const label: Record<Status, string> = {
     loading: "Starting…",
     waiting: "Outside monitoring hours",
+    standby: "Press the button for assistance",
     live: "Monitoring active",
     error: "Connection issue — retrying",
     "no-camera": "No camera — check app permissions",
@@ -878,6 +924,7 @@ function StatusPill({ status }: { status: Status }) {
   const color: Record<Status, string> = {
     loading: "#888",
     waiting: "#555",
+    standby: "#1565c0",
     live: "#2e7d32",
     error: "#b71c1c",
     "no-camera": "#e65100",

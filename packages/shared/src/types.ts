@@ -92,4 +92,11 @@ export interface AppConfig {
    * Only relevant when doorbellPush is configured. Defaults to 15.
    */
   overrideWakeMinutes?: number;
+  /**
+   * The viewer page disconnects from the Daily room after this many minutes
+   * with no interaction (tap to resume), so a page left open on a desk or
+   * phone doesn't keep the tablet streaming and billing all day. Not applied
+   * during a talk session or an active doorbell alert. Defaults to 10.
+   */
+  viewerIdleMinutes?: number;
 }

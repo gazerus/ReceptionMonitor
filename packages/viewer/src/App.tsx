@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DailyEventObjectAppMessage, DailyEventObjectTrack } from "@daily-co/daily-js";
 import { loadAppConfig, type AppConfig } from "@reception/shared";
 import { ViewerRoom } from "./daily";
-import { sendOverrideWake } from "./overrideWake";
+import { sendOverrideWake, sendWatch } from "./overrideWake";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SESSION_KEY = "reception-viewer-role";
@@ -10,6 +10,16 @@ const VIEWER_CODE = "45656";
 const VIEWER_CODE_READONLY = "4680";
 
 type ViewerRole = "full" | "readonly";
+type PauseReason = "hidden" | "idle" | "offline";
+
+// Every minute this page sits in the Daily room keeps the tablet in it too,
+// and both are billed -- so the page steps out when it isn't being looked at.
+const HIDDEN_PAUSE_MS = 30_000;
+const DEFAULT_VIEWER_IDLE_MINUTES = 10;
+// While waiting for the tablet to join, re-send the "watch" request this
+// often, up to a cap (ntfy.sh's free tier rate-limits anonymous publishing).
+const WATCH_RETRY_INTERVAL_MS = 20_000;
+const WATCH_MAX_ATTEMPTS = 4;
 
 function loadStoredRole(): ViewerRole | null {
   const stored = sessionStorage.getItem(SESSION_KEY);
@@ -59,6 +69,11 @@ export default function App() {
   const [draftEnd, setDraftEnd] = useState("");
   const [micGain, setMicGain] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [paused, setPaused] = useState<PauseReason | null>(null);
+  const [tabletPresent, setTabletPresent] = useState(false);
+  const lastInteractionRef = useRef(Date.now());
+  const talkingRef = useRef(false);
+  const doorbellAlertRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const roomRef = useRef<ViewerRoom | null>(null);
@@ -105,7 +120,59 @@ export default function App() {
   }, [role]);
 
   useEffect(() => {
-    if (!role || !config) return;
+    talkingRef.current = talking;
+  }, [talking]);
+  useEffect(() => {
+    doorbellAlertRef.current = doorbellAlert;
+  }, [doorbellAlert]);
+
+  // Step out of the room when the page is hidden (tab switched, phone
+  // locked) for a while, and come back automatically when it's visible.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onVisibility = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (document.visibilityState === "hidden") {
+        timer = setTimeout(() => {
+          if (!talkingRef.current) setPaused("hidden");
+        }, HIDDEN_PAUSE_MS);
+      } else {
+        lastInteractionRef.current = Date.now();
+        setPaused((prev) => (prev === "hidden" ? null : prev));
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  // Step out after a period with no interaction, even if the page is on
+  // screen -- a feed left open on a desk all day was the expensive case.
+  useEffect(() => {
+    const bump = () => {
+      lastInteractionRef.current = Date.now();
+    };
+    window.addEventListener("pointerdown", bump);
+    window.addEventListener("keydown", bump);
+    const interval = setInterval(() => {
+      const idleMs = (config?.viewerIdleMinutes ?? DEFAULT_VIEWER_IDLE_MINUTES) * 60_000;
+      if (talkingRef.current || doorbellAlertRef.current) return;
+      if (Date.now() - lastInteractionRef.current >= idleMs) {
+        setPaused((prev) => prev ?? "idle");
+      }
+    }, 15_000);
+    return () => {
+      window.removeEventListener("pointerdown", bump);
+      window.removeEventListener("keydown", bump);
+      clearInterval(interval);
+    };
+  }, [config]);
+
+  useEffect(() => {
+    if (!role || !config || paused) return;
 
     const room = new ViewerRoom();
     roomRef.current = room;
@@ -184,19 +251,55 @@ export default function App() {
       }
     };
 
+    // The tablet only joins the room when asked (it's otherwise outside
+    // the room, not billing) -- so ask, and keep asking a few times until
+    // it shows up.
+    let watchAttempts = 0;
+    let watchTimer: ReturnType<typeof setInterval> | null = null;
+    const hasTablet = () =>
+      Object.values(room.callObject?.participants() ?? {}).some((p) => !p.local);
+    const requestTablet = () => {
+      if (hasTablet()) return;
+      if (watchAttempts >= WATCH_MAX_ATTEMPTS) {
+        // Don't sit in the room alone waiting -- a viewer in an empty room
+        // is still billed per minute (this is what ran up the Sept bill).
+        setPaused("offline");
+        return;
+      }
+      watchAttempts += 1;
+      sendWatch(config).catch((err) => console.warn("[viewer] watch request failed:", err));
+    };
+    const updateTabletPresent = () => {
+      const present = hasTablet();
+      setTabletPresent(present);
+      if (present) watchAttempts = 0;
+    };
+
+    let cancelled = false;
     (async () => {
       const call = await room.join(config.room.roomUrl);
+      if (cancelled) return;
       call.on("track-started", handleTrackStarted);
       call.on("track-stopped", handleTrackStopped);
       call.on("app-message", handleAppMessage);
+      call.on("participant-joined", updateTabletPresent);
+      call.on("participant-left", updateTabletPresent);
       setConnected(true);
+      updateTabletPresent();
+      requestTablet();
+      watchTimer = setInterval(requestTablet, WATCH_RETRY_INTERVAL_MS);
     })();
 
     return () => {
+      cancelled = true;
+      if (watchTimer) clearInterval(watchTimer);
       const call = roomRef.current?.callObject;
       call?.off("track-started", handleTrackStarted);
       call?.off("track-stopped", handleTrackStopped);
       call?.off("app-message", handleAppMessage);
+      call?.off("participant-joined", updateTabletPresent);
+      call?.off("participant-left", updateTabletPresent);
+      setTabletPresent(false);
       stream.getTracks().forEach((t) => stream.removeTrack(t));
       void room.leave();
       setConnected(false);
@@ -206,7 +309,7 @@ export default function App() {
       setEditingSchedule(false);
       stopDoorbellAlert();
     };
-  }, [role, config]);
+  }, [role, config, paused]);
 
   if (!config) {
     return <Centered>Loading…</Centered>;
@@ -276,6 +379,7 @@ export default function App() {
     try {
       await sendOverrideWake(config);
       setWakeState("sent");
+      setPaused((prev) => (prev === "offline" ? null : prev));
     } catch (err) {
       console.warn("[viewer] override wake failed:", err);
       setWakeState("error");
@@ -330,6 +434,45 @@ export default function App() {
         muted={!remoteAudioActive}
         style={{ flex: 1, objectFit: "contain", background: "#000" }}
       />
+      {(paused || (connected && !tabletPresent)) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            bottom: 90,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            color: "#ccc",
+            textAlign: "center",
+            padding: 24,
+            pointerEvents: paused ? "auto" : "none",
+          }}
+        >
+          {paused ? (
+            <>
+              <div>
+                {paused === "offline"
+                  ? "Reception tablet didn't come online — it may be outside monitoring hours, or offline."
+                  : "Feed paused to save streaming costs."}
+              </div>
+              <button
+                onClick={() => {
+                  lastInteractionRef.current = Date.now();
+                  setPaused(null);
+                }}
+                style={{ padding: "12px 28px", borderRadius: 999, border: "none", fontSize: 16, fontWeight: 600, background: "#2e7d32", color: "#fff", cursor: "pointer" }}
+              >
+                {paused === "offline" ? "Try again" : "Resume"}
+              </button>
+            </>
+          ) : (
+            <div>Waking reception tablet…</div>
+          )}
+        </div>
+      )}
       <video
         ref={localVideoRef}
         autoPlay
@@ -350,7 +493,7 @@ export default function App() {
       />
       <div style={{ padding: 16, display: "flex", justifyContent: "center", gap: 12 }}>
         <span style={{ color: connected ? "#2e7d32" : "#888", alignSelf: "center", fontSize: 13 }}>
-          {connected ? "Connected" : "Connecting…"}
+          {paused ? "Paused" : connected ? (tabletPresent ? "Connected" : "Waiting for tablet") : "Connecting…"}
         </span>
         {tabletScreenOn !== null && (
           <span

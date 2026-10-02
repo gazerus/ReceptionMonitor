@@ -35,6 +35,27 @@ existing cPanel site**, and editing that file — changing hours, tuning
 resolution — takes effect without rebuilding or redeploying either app. See
 `packages/shared/src/config.default.json` for the shape.
 
+## On-demand connection (cost control) — read this first
+
+Daily bills every participant-minute, including a viewer sitting alone in
+an empty room. In Sept 2026 the viewer page was left open around the clock
+(24-hour sessions with 2–3 participants), which ran up a ~US$96 bill. So:
+
+- **Tablet** no longer joins the room just because it's inside scheduled
+  hours. It sits in **standby** (doorbell works, nothing billed) and joins
+  only when a viewer sends a `watch` request (or an admin `wake`) on the
+  ntfy wake topic. It leaves again once no viewer has been connected for
+  60s. `watch` is honoured inside scheduled hours, during an admin override,
+  or for 10 minutes after a doorbell press; `wake` works any time.
+- **Viewer** sends `watch` on connect (retries up to 4 times, 20s apart),
+  and leaves the room if the tablet never shows up, after 30s with the page
+  hidden, or after `viewerIdleMinutes` (default 10) with no taps/keys — not
+  during a talk session or doorbell alert. Tap **Resume** to reconnect.
+- Expected usage is now only actual viewing time × 2 participants, well
+  inside the 10,000 free minutes/month for normal use.
+
+Some of the "always-on ambient stream" wording below predates this change.
+
 ## What's implemented
 
 - **Reception app**: polls the schedule every 30s; joins the Daily room and
