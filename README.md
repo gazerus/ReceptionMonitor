@@ -49,7 +49,7 @@ an empty room. In Sept 2026 the viewer page was left open around the clock
   or for 10 minutes after a doorbell press; `wake` works any time.
 - **Viewer** sends `watch` on connect (retries up to 4 times, 20s apart),
   and leaves the room if the tablet never shows up, after 30s with the page
-  hidden, or after `viewerIdleMinutes` (default 10) with no taps/keys — not
+  hidden, or after `viewerIdleMinutes` (default 5) with no taps/keys — not
   during a talk session or doorbell alert. Tap **Resume** to reconnect.
 - Expected usage is now only actual viewing time × 2 participants, well
   inside the 10,000 free minutes/month for normal use.
@@ -234,7 +234,7 @@ Some of the "always-on ambient stream" wording below predates this change.
   hours) — outside scheduled hours the tablet leaves the room entirely, so
   there's nothing to receive the message.
 - **Viewer**: fetches the same config, gates access with one of two shared
-  codes (`App.tsx`): `45656` (same code as the tablet's settings panel)
+  codes (`App.tsx`): `11111`
   grants full access, `4680` grants **view-only** access — just the raw
   feed, nothing else: no Talk button, no mic/camera permission ever
   requested for that session, no tablet screen on/off indicator, and no

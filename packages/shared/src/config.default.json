@@ -19,5 +19,5 @@
   "noReceptionistMessage": "No receptionist is currently online. If you have a booking, please take a seat and someone will be with you before your scheduled time.",
   "closedMessage": "Reception is currently closed. We'll be notified you're here and will follow up when we're next open.",
   "overrideWakeMinutes": 15,
-  "viewerIdleMinutes": 10
+  "viewerIdleMinutes": 5
 }

@@ -6,7 +6,7 @@ import { sendOverrideWake, sendWatch } from "./overrideWake";
 
 const CONFIG_URL = import.meta.env.VITE_CONFIG_URL as string | undefined;
 const SESSION_KEY = "reception-viewer-role";
-const VIEWER_CODE = "45656";
+const VIEWER_CODE = "11111";
 const VIEWER_CODE_READONLY = "4680";
 
 type ViewerRole = "full" | "readonly";
@@ -15,7 +15,7 @@ type PauseReason = "hidden" | "idle" | "offline";
 // Every minute this page sits in the Daily room keeps the tablet in it too,
 // and both are billed -- so the page steps out when it isn't being looked at.
 const HIDDEN_PAUSE_MS = 30_000;
-const DEFAULT_VIEWER_IDLE_MINUTES = 10;
+const DEFAULT_VIEWER_IDLE_MINUTES = 5;
 // While waiting for the tablet to join, re-send the "watch" request this
 // often, up to a cap (ntfy.sh's free tier rate-limits anonymous publishing).
 const WATCH_RETRY_INTERVAL_MS = 20_000;

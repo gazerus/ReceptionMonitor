@@ -96,7 +96,7 @@ export interface AppConfig {
    * The viewer page disconnects from the Daily room after this many minutes
    * with no interaction (tap to resume), so a page left open on a desk or
    * phone doesn't keep the tablet streaming and billing all day. Not applied
-   * during a talk session or an active doorbell alert. Defaults to 10.
+   * during a talk session or an active doorbell alert. Defaults to 5.
    */
   viewerIdleMinutes?: number;
 }
